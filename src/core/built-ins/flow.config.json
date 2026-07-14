@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "flows": [
+    {
+      "id": "platform-tour",
+      "module": "./platform-tour/index.ts",
+      "exportName": "platformTourBinding",
+      "label": "Bagelwerk Platform Tour",
+      "description": "The hero / welcome flow, runnable through the external-flow loader (and the Flow Supervisor).",
+      "aliases": ["tour"]
+    }
+  ]
+}

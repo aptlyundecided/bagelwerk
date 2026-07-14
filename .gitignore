@@ -1,0 +1,33 @@
+/node_modules
+/dist
+/runs
+/flow-library/
+.artifacts
+.artifacts/
+_build.log
+debug-raw-*.txt
+/.agents
+/.codex
+nul
+.current-os
+.DS_Store
+
+# Pi orchestration artifacts (machine-specific, do not commit)
+.pi/batch-state.json
+.pi/batch-history.json
+.pi/lane-state-*
+.pi/merge-result-*
+.pi/merge-request-*
+.pi/worker-conversation-*
+.pi/orch-logs/
+.pi/orch-abort-signal
+.pi/settings.json
+.worktrees/
+
+# Pi project-local packages (if using pi install -l)
+.pi/npm/
+.env
+.artifacts
+.antigravitycli
+.claude
+.cursor

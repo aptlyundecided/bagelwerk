@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "ignoreDeprecations": "5.0",
+    "types": [
+      "node"
+    ],
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "src/index.ts",
+    "src/core/nodes/**/*.ts",
+    "src/core/flows/**/*.ts",
+    "src/core/flow-workbench/**/*.ts",
+    "src/core/flow-runner/**/*.ts",
+    "src/core/flow-supervisor/**/*.ts",
+    "src/core/graph-visualization/**/*.ts",
+    "src/core/agent-execution/**/*.ts",
+    "src/core/built-ins/**/*.ts",
+    "src/core/terminal/**/*.ts",
+    "src/tools/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
+  ]
+}

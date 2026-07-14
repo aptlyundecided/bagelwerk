@@ -1,0 +1,59 @@
+flowchart TD
+  A["resolveFlowRunnerBinding()"] --> B["createStaticFlowNodeLibrary(configuredNodes)"]
+  B --> C["resolveFlowRunnerGraph(flow, nodeLibrary, options)"]
+
+  C --> D["parseConfiguredFlowSpec(flow)"]
+  D --> E["createResolveState()"]
+
+  E --> F["flattenFlow()"]
+  F --> F1["register Flow boundaries"]
+  F --> F2["register Nodes by qualified path"]
+  F --> F3["record child Flow paths"]
+  F --> F4["record raw edges"]
+  F --> F5["carry inherited execution policy"]
+
+  F --> G["computeFlowBoundaryExits(root)"]
+  G --> G1["resolve each Flow initial ref"]
+  G --> G2["collect all node paths inside boundary"]
+  G --> G3["find exit Nodes"]
+
+  G --> H["expandRawEdges()"]
+  H --> H1["Node source stays one Node"]
+  H --> H2["Flow source expands to exit Nodes"]
+  H --> H3["Node target stays one Node"]
+  H --> H4["Flow target resolves to initial Node"]
+
+  H --> I["applyExecutionPolicyOverlay()"]
+  I --> I1["validate overlay Flow paths"]
+  I --> I2["merge global overlay policy"]
+  I --> I3["merge path-specific overlay policy"]
+  I --> I4["copy effective policy to Nodes"]
+
+  I --> J["validateAndAttachResolvedEdges()"]
+  J --> J1["verify edge sources exist"]
+  J --> J2["verify edge targets exist"]
+  J --> J3["attach outgoing edges to source Nodes"]
+
+  J --> K["requireResolvedInitialNode()"]
+  K --> L["buildResolvedFlowGraph()"]
+
+  L --> M["FlowRunnerResolvedFlow"]
+  M --> N["{ resolved: ResolvedFlowGraph }"]
+
+  N --> O["Flow Runner can now execute graph"]
+
+  subgraph "ResolvedFlowGraph contains"
+    R1["rootFlowId"]
+    R2["rootFlowPath"]
+    R3["initialNodePath"]
+    R4["nodesByPath"]
+    R5["flowsByPath"]
+    R6["edges"]
+  end
+
+  N --> R1
+  N --> R2
+  N --> R3
+  N --> R4
+  N --> R5
+  N --> R6
