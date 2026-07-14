@@ -1,6 +1,6 @@
 {
   "name": "bagelwerk",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Agent workflow engine for developers.",
   "main": "dist/index.js",
@@ -8,6 +8,7 @@
   "keywords": [],
   "scripts": {
     "build": "tsc",
+    "prepare": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "skills:sync": "tsx src/tools/skill-surface-parity/skillSurfaceParityCli.ts",
