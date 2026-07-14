@@ -1,5 +1,9 @@
 # Reuben Goldberg Bagelwerk
 
+<p align="center">
+  <img src="assets/reuben-goldberg-bagelwerk.png" alt="Reuben Goldberg Bagelwerk" width="640">
+</p>
+
 > **Agent Workflow Engine**
 
 Bagelwerk lets you build highly capable AI agents by composing linked agent skills that enable prompt chaining, routing, parallelization, reflection, tool use, planning, multi-agent collaboration, memory management, and other agent orchestration capabilities.
