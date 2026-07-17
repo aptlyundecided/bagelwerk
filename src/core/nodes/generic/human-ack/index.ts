@@ -39,6 +39,7 @@ export type HumanAckArtifact = {
   acknowledged: boolean;
   acknowledgedAt?: string;
   reason?: "interaction_unavailable";
+  answerText?: string;
   answerLength?: number;
 };
 
@@ -81,11 +82,17 @@ function resolveInteraction(input: unknown): HumanAckInteraction | undefined {
 
 function resolveWorkbenchRunDir(input: unknown): string | undefined {
   if (!isRecord(input)) return undefined;
-  const workbench = input.workbench;
-  if (!isRecord(workbench)) return undefined;
-  const record = workbench.record;
-  if (!isRecord(record)) return undefined;
-  return typeof record.runDir === "string" && record.runDir.trim().length > 0 ? record.runDir : undefined;
+  // Support both flow-runner (runtime) and legacy workbench (workbench) input shapes.
+  for (const key of ["runtime", "workbench"] as const) {
+    const surface = input[key];
+    if (isRecord(surface)) {
+      const record = surface.record;
+      if (isRecord(record) && typeof record.runDir === "string" && record.runDir.trim().length > 0) {
+        return record.runDir;
+      }
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -199,7 +206,7 @@ This file is a durable record that a Flow reached a human acknowledgement checkp
 - Node type: \`${artifact.nodeType}\`
 - Node id: \`${artifact.nodeId}\`
 - Acknowledged: ${artifact.acknowledged ? "yes" : "no"}
-${artifact.acknowledgedAt ? `- Acknowledged at: ${artifact.acknowledgedAt}\n` : ""}${artifact.reason ? `- Reason: ${artifact.reason}\n` : ""}${typeof artifact.answerLength === "number" ? `- Answer length: ${artifact.answerLength}\n` : ""}`;
+${artifact.acknowledgedAt ? `- Acknowledged at: ${artifact.acknowledgedAt}\n` : ""}${artifact.reason ? `- Reason: ${artifact.reason}\n` : ""}${artifact.answerText ? `- Answer: ${artifact.answerText}\n` : ""}${typeof artifact.answerLength === "number" ? `- Answer length: ${artifact.answerLength}\n` : ""}`;
 }
 
 async function writeHumanAckArtifacts(args: {
@@ -281,6 +288,7 @@ export async function runHumanAckNode(args: {
     prompt: args.params.prompt,
     acknowledged: true,
     acknowledgedAt: new Date().toISOString(),
+    answerText: answer.answer,
     answerLength: answer.answer.length,
   };
   const artifactFiles = await writeHumanAckArtifacts({ runDir, artifactBaseName: args.params.artifactBaseName, artifact: acknowledgement });

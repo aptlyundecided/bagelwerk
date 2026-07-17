@@ -75,6 +75,7 @@ type PiSessionLike = {
 export type PiCommandInvocation = {
   piPath: string;
   cwd: string;
+  provider: string;
   model: string;
   prompt: string;
   allowedTools: string[];
@@ -108,6 +109,23 @@ type ExecutePiAgentNodeSessionDeps = {
    */
   signal?: AbortSignal;
 };
+
+export function piCliArgsForInvocation(params: Pick<PiCommandInvocation, "provider" | "model" | "allowedTools">): string[] {
+  const args = ["--print", "--mode", "json", "--no-session"];
+  const provider = params.provider.trim();
+  if (provider && provider.toLowerCase() !== "pi" && provider.toLowerCase() !== "auto") {
+    args.push("--provider", provider);
+  }
+  const model = params.model.trim();
+  if (model && model.toLowerCase() !== "auto") {
+    args.push("--model", model);
+  }
+  const tools = params.allowedTools.map((tool) => tool.trim()).filter(Boolean);
+  if (tools.length > 0) {
+    args.push("--tools", tools.join(","));
+  }
+  return args;
+}
 
 const ARTIFACTS_ROOT_ENV = "BAGELWERK_AGENT_ARTIFACTS_ROOT";
 const PI_AGENT_PATH_ENV = "PI_AGENT_PATH";
@@ -387,17 +405,7 @@ async function defaultRunPiCommand(params: PiCommandInvocation): Promise<PiComma
       return;
     }
 
-    const args = ["--print", "--mode", "json", "--no-session"];
-    const model = params.model.trim();
-    // Only forward a concrete model; "auto"/empty lets pi use its own configured default
-    // provider+model (e.g. a signed-in codex provider). We never pass --provider/--api-key.
-    if (model && model.toLowerCase() !== "auto") {
-      args.push("--model", model);
-    }
-    const tools = params.allowedTools.map((tool) => tool.trim()).filter(Boolean);
-    if (tools.length > 0) {
-      args.push("--tools", tools.join(","));
-    }
+    const args = piCliArgsForInvocation(params);
 
     const child = spawn(params.piPath, args, {
       cwd: params.cwd,
@@ -575,11 +583,11 @@ export async function executePiAgentNodeSession(
       }
       capturedMessages = capturedMessages ?? session.messages;
     } else {
-      // Default: spawn the installed `pi` CLI. pi resolves its own provider + auth
-      // (e.g. a signed-in codex provider); we forward the prompt via stdin only.
+      // Default: spawn the installed `pi` CLI with explicit provider + model.
       const commandResult = await runPiCommand({
         piPath: piAgentPath,
         cwd,
+        provider: params.provider.trim(),
         model: params.model.trim(),
         prompt: params.prompt,
         allowedTools: normalizedAllowedTools,

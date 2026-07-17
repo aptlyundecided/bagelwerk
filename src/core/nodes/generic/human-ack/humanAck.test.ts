@@ -32,10 +32,10 @@ test("core.human-ack completes on Enter and writes context archaeology artifacts
             assert.match(prompt, /Read the handoff/);
             assert.match(contextNote ?? "", /durable acknowledgement artifact/);
             assert.equal(allowEmpty, true);
-            return { answer: "" };
+            return { answer: "Looks good to continue." };
           },
         },
-        workbench: { record: { runDir: root } },
+        runtime: { record: { runDir: root } },
       },
     });
 
@@ -47,8 +47,11 @@ test("core.human-ack completes on Enter and writes context archaeology artifacts
     const json = JSON.parse(await readFile(path.join(root, "read-handoff-ack.json"), "utf8")) as HumanAckNodePayload["acknowledgement"];
     assert.equal(json.nodeType, "core.human-ack");
     assert.equal(json.acknowledged, true);
+    assert.equal(json.answerText, "Looks good to continue.");
+    assert.equal(json.answerLength, "Looks good to continue.".length);
     const markdown = await readFile(path.join(root, "read-handoff-ack.md"), "utf8");
     assert.match(markdown, /Context archaeology/);
+    assert.match(markdown, /- Answer: Looks good to continue\./);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
