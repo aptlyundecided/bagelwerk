@@ -8,6 +8,7 @@ _build.log
 debug-raw-*.txt
 /.agents
 /.codex
+/.scratch
 nul
 .current-os
 .DS_Store

@@ -13,6 +13,10 @@ import {
   resolveFlowRunnerBinding,
   runExternalFlow,
   runExternalNode,
+  type RunExternalFlowParams,
+  type RunExternalFlowResult,
+  type RunExternalNodeParams,
+  type RunExternalNodeResult,
 } from "../../core/flow-runner";
 import { describeFlowProgressGraph, runFlowRunnerInk } from "./ink";
 
@@ -52,12 +56,13 @@ function consoleProgressMiddlewares(mode: FlowRunnerCliProgressMode) {
 function printUsage(): void {
   console.error(`Usage:
   npm run flow:runner -- list [--cwd <path>] [--json]
-  npm run flow:runner -- run-flow <flow-id> <session-id> [inputJson] [--cwd <path>] [--progress console|ink|none] [--auto-exit]
-  npm run flow:runner -- run-node <flow-id> <session-id> <qualified-node-path> [inputJson] [--cwd <path>] [--progress console|ink|none] [--auto-exit]
+  npm run flow:runner -- run-flow <flow-id> <session-id> [inputJson] [--cwd <path>] [--progress console|ink|none] [--auto-exit] [--resume]
+  npm run flow:runner -- run-node <flow-id> <session-id> <qualified-node-path> [inputJson] [--cwd <path>] [--progress console|ink|none] [--auto-exit] [--resume]
 
 This CLI loads external Flow workspaces from flow.config.json in --cwd or the current working directory.
 Built-in Flow CLIs may use the same Flow Runner core through package-specific adapters/profiles.
-Use --progress ink to render the generic Flow Runner Ink view. Use --no-progress or --progress none to suppress lifecycle progress output.`);
+Use --progress ink to render the generic Flow Runner Ink view. Use --no-progress or --progress none to suppress lifecycle progress output.
+Use --resume to skip nodes whose accepted artifacts already exist (pick up where a previous run left off).`);
 }
 
 function renderFlowsTable(cwd: string, flows: Awaited<ReturnType<typeof listExternalFlows>>): string {
@@ -146,11 +151,21 @@ async function pickFlowId(cwd: string): Promise<string> {
   }
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
+export type FlowRunnerCliDeps = {
+  runExternalFlow?: (params: RunExternalFlowParams<Record<string, unknown>>) => Promise<RunExternalFlowResult<Record<string, unknown>>>;
+  runExternalNode?: (params: RunExternalNodeParams<Record<string, unknown>>) => Promise<RunExternalNodeResult<Record<string, unknown>>>;
+  writeOutput?: (line: string) => void;
+};
+
+export async function runFlowRunnerCli(rawArgs = process.argv.slice(2), deps: FlowRunnerCliDeps = {}): Promise<void> {
+  const args = [...rawArgs];
+  const runFlow = deps.runExternalFlow ?? runExternalFlow;
+  const runNode = deps.runExternalNode ?? runExternalNode;
+  const writeOutput = deps.writeOutput ?? ((line: string) => console.log(line));
   const cwd = takeOption(args, "--cwd") ?? process.cwd();
   const autoExit = takeFlag(args, "--auto-exit");
   const noInteractive = takeFlag(args, "--no-interactive");
+  const resume = takeFlag(args, "--resume");
   const progressMode = parseProgressMode(args);
   const command = args.shift() ?? "pick";
 
@@ -163,16 +178,16 @@ async function main(): Promise<void> {
     const asJson = takeFlag(args, "--json");
     const flows = await listExternalFlows(cwd);
     if (asJson) {
-      console.log(JSON.stringify({ cwd, flows }, null, 2));
+      writeOutput(JSON.stringify({ cwd, flows }, null, 2));
     } else {
-      console.log(renderFlowsTable(cwd, flows));
+      writeOutput(renderFlowsTable(cwd, flows));
     }
     return;
   }
 
   if (command === "pick") {
     const flowId = await pickFlowId(cwd);
-    console.log(`Selected: ${flowId}`);
+    writeOutput(`Selected: ${flowId}`);
     return;
   }
 
@@ -196,10 +211,10 @@ async function main(): Promise<void> {
           metadata: { title: `Flow Runner: ${flowId}`, flowId, sessionId, executionPlan: { kind: "whole-flow" } },
           ...(graph ? { graph } : {}),
           autoExit,
-          run: ({ onEvent }) => runExternalFlow({ cwd, flowId, sessionId, input: runInput, onEvent }),
+          run: ({ onEvent }) => runFlow({ cwd, flowId, sessionId, input: runInput, onEvent, ...(resume ? { resume: "accepted-only" } : {}) }),
         })).result
-      : await runExternalFlow({ cwd, flowId, sessionId, input: runInput, middlewares: consoleProgressMiddlewares(progressMode) });
-    console.log(JSON.stringify(externalFlowRunSummary(result), null, 2));
+      : await runFlow({ cwd, flowId, sessionId, input: runInput, middlewares: consoleProgressMiddlewares(progressMode), ...(resume ? { resume: "accepted-only" } : {}) });
+    writeOutput(JSON.stringify(externalFlowRunSummary(result), null, 2));
     if (result.run.runTree.status !== "completed") {
       printFailureFooter({ flowId, sessionId, cwd, result });
       process.exitCode = 1;
@@ -221,10 +236,10 @@ async function main(): Promise<void> {
           metadata: { title: `Flow Runner Node: ${qualifiedNodePath}`, flowId, sessionId },
           ...(graph ? { graph } : {}),
           autoExit,
-          run: ({ onEvent }) => runExternalNode({ cwd, flowId, sessionId, qualifiedNodePath, input: parsedInput, onEvent }),
+          run: ({ onEvent }) => runNode({ cwd, flowId, sessionId, qualifiedNodePath, input: parsedInput, onEvent, ...(resume ? { resume: "accepted-only" } : {}) }),
         })).result
-      : await runExternalNode({ cwd, flowId, sessionId, qualifiedNodePath, input: parsedInput, middlewares: consoleProgressMiddlewares(progressMode) });
-    console.log(JSON.stringify(externalNodeRunSummary(result), null, 2));
+      : await runNode({ cwd, flowId, sessionId, qualifiedNodePath, input: parsedInput, middlewares: consoleProgressMiddlewares(progressMode), ...(resume ? { resume: "accepted-only" } : {}) });
+    writeOutput(JSON.stringify(externalNodeRunSummary(result), null, 2));
     return;
   }
 
@@ -242,7 +257,9 @@ async function describeExternalFlowInkGraph(args: { cwd: string; flowId: string 
   return describeFlowProgressGraph({ resolvedFlow, executionPlan: { kind: "whole-flow" } });
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack : String(error));
-  process.exit(1);
-});
+if (require.main === module) {
+  runFlowRunnerCli().catch((error) => {
+    console.error(error instanceof Error ? error.stack : String(error));
+    process.exit(1);
+  });
+}
