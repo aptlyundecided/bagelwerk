@@ -29,11 +29,12 @@ function defaultOperatorId(): string {
   return process.env.USERNAME ?? process.env.USER ?? "operator";
 }
 
+// [@agents-focus] Never spread process.env into the default input. Whatever is here is persisted verbatim
+// into every node-result.json under .artifacts/, so a run folder shared outside the machine would carry the
+// operator's shell variables. Nodes read the environment themselves (see: src/core/nodes/generic/runtimeAccess.ts#L28-L33)
+// and only an env the caller passes explicitly is treated as an override.
 function defaultInput<TInput>(input: TInput | undefined): TInput {
-  return {
-    env: process.env,
-    ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
-  } as TInput;
+  return (input && typeof input === "object" && !Array.isArray(input) ? input : {}) as TInput;
 }
 
 // Rewrite a cross-flow artifact reference when the root flow is re-namespaced. Flow-local short

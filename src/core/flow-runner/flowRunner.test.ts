@@ -137,3 +137,40 @@ test("runs an external flow through Generic Flow Runner and preserves in-place s
   assert.equal(state.runs, 1);
   assert.deepEqual(state.messages, ["external powers online"]);
 });
+
+test("does not persist the process environment into node-result.json", async () => {
+  const root = await createExternalSmokeRepo();
+  const [flow] = await listExternalFlows(root);
+  assert.ok(flow);
+
+  const sentinel = `leak-canary-${Date.now()}`;
+  process.env.BAGELWERK_TEST_ENV_SENTINEL = sentinel;
+  try {
+    const result = await runExternalFlow({ cwd: root, flowId: flow.id, sessionId: "no-env" });
+    assert.equal(result.run.runTree.status, "completed");
+
+    for (const node of result.run.runTree.nodes) {
+      for (const dir of [node.runDir, node.latestDir]) {
+        const raw = await readFile(path.join(dir, "node-result.json"), "utf8");
+        assert.ok(!raw.includes(sentinel), `${dir}/node-result.json carries the process environment`);
+        assert.ok(!raw.includes('"PATH"'), `${dir}/node-result.json carries PATH`);
+        const persisted = JSON.parse(raw) as { working?: { input?: { userInput?: { env?: unknown } } } };
+        assert.equal(persisted.working?.input?.userInput?.env, undefined);
+      }
+    }
+  } finally {
+    delete process.env.BAGELWERK_TEST_ENV_SENTINEL;
+  }
+});
+
+test("keeps an env the caller passes explicitly as an override", async () => {
+  const root = await createExternalSmokeRepo();
+  const [flow] = await listExternalFlows(root);
+  assert.ok(flow);
+
+  const result = await runExternalFlow({ cwd: root, flowId: flow.id, sessionId: "explicit-env", input: { env: { ONLY_THIS: "1" } } });
+  const [node] = result.run.runTree.nodes;
+  assert.ok(node);
+  const persisted = JSON.parse(await readFile(path.join(node.runDir, "node-result.json"), "utf8")) as { working: { input: { userInput: { env?: Record<string, string> } } } };
+  assert.deepEqual(persisted.working.input.userInput.env, { ONLY_THIS: "1" });
+});
