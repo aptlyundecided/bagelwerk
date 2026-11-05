@@ -24,6 +24,7 @@
     "src/core/flow-supervisor/**/*.ts",
     "src/core/graph-visualization/**/*.ts",
     "src/core/agent-execution/**/*.ts",
+    "src/core/records/**/*.ts",
     "src/core/built-ins/**/*.ts",
     "src/core/terminal/**/*.ts",
     "src/tools/**/*.ts"

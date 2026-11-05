@@ -19,6 +19,7 @@ import { createFlowRunnerNodeExecutionInput, type FlowRunnerNodeExecutionInput }
 import { resolveFlowRunnerBinding } from "../resolution/resolveFlowRunnerBinding";
 import type { FlowRunnerNodeRunResult, RunFlowRunnerNodeParams } from "../api/contracts";
 import { emitFlowRunnerEvent } from "../events/eventSink";
+import { bindRecordsEvents, runWithRecordsContext } from "../../../records/mirror/recordsMirror";
 import { runFlowRunnerMiddlewareHook, type FlowRunnerNodeMiddlewareContext } from "../middleware/middleware";
 import { resolveExecutionPolicyOverlay } from "../policy/executionPolicy";
 import { buildPreflightDependencies } from "../preflight/preflight";
@@ -72,6 +73,7 @@ export async function runFlowRunnerNode<TInput>(params: RunFlowRunnerNodeParams<
     launchedAt: new Date().toISOString(),
   };
   const events: FlowRunnerEvent[] = [];
+  bindRecordsEvents(events, path.resolve(record.runDir));
   emitFlowRunnerEvent({
     events,
     onEvent: params.onEvent,
@@ -132,7 +134,8 @@ export async function runFlowRunnerNode<TInput>(params: RunFlowRunnerNodeParams<
       },
     });
   } else {
-    runResult = await executeNode({ params, target, entry, parsedParams, runtimeInput, middlewareContext });
+    // Agent runs started inside this Node are linked to its run record.
+    runResult = await runWithRecordsContext({ nodeRunDir: path.resolve(record.runDir) }, () => executeNode({ params, target, entry, parsedParams, runtimeInput, middlewareContext }));
   }
 
   const artifactEvents = await observeNodeArtifacts({

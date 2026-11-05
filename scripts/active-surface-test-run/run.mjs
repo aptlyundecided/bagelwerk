@@ -18,6 +18,7 @@ const activeRoots = [
   join(repoRoot, "src", "core", "flow-supervisor"),
   join(repoRoot, "src", "core", "graph-visualization"),
   join(repoRoot, "src", "core", "agent-execution"),
+  join(repoRoot, "src", "core", "records"),
   join(repoRoot, "src", "core", "built-ins"),
   join(repoRoot, "src", "tools"),
   join(repoRoot, "flow-library", "recipe-discovery"),
@@ -53,7 +54,12 @@ function isModelTestFile(absPath) {
 
 const mode = (process.argv[2] || "default").trim();
 const all = activeRoots.flatMap((root) => collectTestFiles(root)).sort();
-const files = mode === "models" ? all.filter(isModelTestFile) : all.filter((p) => !isModelTestFile(p));
+const recordsRoot = join(repoRoot, "src", "core", "records");
+const files = mode === "models"
+  ? all.filter(isModelTestFile)
+  : mode === "records"
+    ? all.filter((p) => p.startsWith(recordsRoot) && !isModelTestFile(p))
+    : all.filter((p) => !isModelTestFile(p));
 
 if (files.length === 0) {
   const label = mode === "models" ? "model-tier (*.model.test.ts)" : "default-tier (*.test.ts excluding *.model.test.ts)";
@@ -65,7 +71,8 @@ const relFiles = files.map((abs) => relative(repoRoot, abs).split("\\").join("/"
 const result = spawnSync(process.execPath, ["./node_modules/tsx/dist/cli.mjs", "--test", ...relFiles], {
   cwd: repoRoot,
   stdio: "inherit",
-  env: process.env,
+  // Suites stay hermetic: the run-record store is off unless a test injects one (records tests do).
+  env: { ...process.env, BAGELWERK_RECORDS: process.env.BAGELWERK_RECORDS ?? "off" },
 });
 
 process.exit(result.status ?? 1);

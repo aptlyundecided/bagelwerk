@@ -13,3 +13,5 @@ export * from "./flow-supervisor";
 export * from "./graph-visualization";
 export * from "./notifications";
 export * from "./built-ins";
+// Record Store, namespaced so its names cannot shadow Flow/Node exports: `import { records } from "bagelwerk"`.
+export * as records from "./records";

@@ -19,6 +19,9 @@ This glossary is intentionally short. It defines the terms we actively want peop
 | **Flow Workbench** | Developer-mode runner and inspection surface over canonical Flow/Node services. It should consume or mirror Flow Runner behavior rather than act as the production execution substrate. |
 | **Accepted Node Result** | The accepted output/artifact surface for a Node, used as downstream precedent. |
 | **Preflight** | Validation before a Node run starts, especially upstream accepted-artifact checks. |
+| **Record Store** | The Postgres-compatible system of record for run state (Flow/Node/agent runs, events, artifacts, acceptances), on PGlite or Postgres. It decides which run is accepted; see `src/core/records/README.md`. |
+| **Records Server** | The single process (`npm run records -- serve`) that owns a PGlite Record Store so any number of processes can write to it. |
+| **Accepted Surface** | The `accepted/` directory for a Node: a materialised cache of the Accepted Node Result that downstream Nodes read, rebuilt from the Record Store when missing or out of date. |
 | **Execution Policy** | Contextual execution settings attached to a Flow and resolved before Node execution. Policy can influence how a Node runs, but does not move artifact contracts away from the Node boundary. |
 | **Work Orchestrator** | The layer above Flow Supervisor (reserved in `src/core/flow-supervisor/README.md`) that selects the next unit of work, chooses a Flow, delegates each run to Flow Supervisor, and decides the next unit from the supervisor report. It does not call Flow Runner or Nodes directly and is not a runtime. The Night Shift prototype (sibling repo) is its first implementation. |
 

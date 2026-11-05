@@ -22,6 +22,7 @@ The living implementation surface is under `src/core/`.
 - `src/core/flow-runner/` — canonical Workbench-free Flow execution surface
 - `src/core/flow-workbench/` — developer-mode tooling over canonical Flow/Node seams
 - `src/core/built-ins/` — intentionally small active built-in Flow package surface; currently `platform-tour` is the active built-in package
+- `src/core/records/` — Record Store: run state in Postgres-compatible SQL (PGlite now, Postgres later), live mirror, search, MCP tools
 
 ## Current architectural rules
 
@@ -38,6 +39,7 @@ The living implementation surface is under `src/core/`.
 9. **Preflight should fail fast** when required accepted upstream artifacts are missing.
 10. **Legacy orchestration code should not regain active ownership.** Extract helpers if needed; do not restore deleted historical trees as live dependencies.
 11. **Retired pre-Flow/Node substrates stay retired.** Do not add new ownership islands outside the Flow / Node model.
+12. **The Record Store is the system of record for run state.** Files under `.artifacts/` stay the working surface and spool; when the store has a current acceptance it wins and `accepted/` is rebuilt from it. Records writes never fail a run. See `src/core/records/README.md`.
 
 ## Repository shape
 

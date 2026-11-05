@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { recordAgentObservationBegun } from "../records/mirror/hooks";
+
 export type NodeExecutionStatus = "completed" | "failed";
 export type NodeQualityStatus = "success" | "degraded" | "failed";
 
@@ -61,25 +63,37 @@ export async function beginNodeObservation(
     await writeText(relativePath, `${JSON.stringify(value, null, 2)}\n`);
   }
 
-  await writeJson("summary.json", { runId: params.runId, nodeId: params.nodeId, startedAt: started.toISOString() });
+  // Mirror into the Record Store; never fails the agent run.
+  const mirror = recordAgentObservationBegun({ observationDir: artifactDir, ...(params.runId ? { runId: params.runId } : {}), nodeId: params.nodeId, startedAt: started.toISOString() });
+  const writeTextMirrored = async (relativePath: string, content: string): Promise<void> => {
+    await writeText(relativePath, content);
+    mirror.file(relativePath, content);
+  };
+  const writeJsonMirrored = async (relativePath: string, value: unknown): Promise<void> => {
+    await writeTextMirrored(relativePath, `${JSON.stringify(value, null, 2)}\n`);
+  };
+
+  await writeJsonMirrored("summary.json", { runId: params.runId, nodeId: params.nodeId, startedAt: started.toISOString() });
 
   return {
     artifactDir,
-    writeText,
-    writeJson,
+    writeText: writeTextMirrored,
+    writeJson: writeJsonMirrored,
     async appendNdjson(relativePath: string, value: unknown): Promise<void> {
       const out = path.join(artifactDir, relativePath);
       await mkdir(path.dirname(out), { recursive: true });
       await appendFile(out, `${JSON.stringify(value)}\n`, "utf8");
+      mirror.ndjson(relativePath, value);
     },
     async finalize(summary) {
-      await writeJson("summary.json", {
+      await writeJsonMirrored("summary.json", {
         runId: params.runId,
         nodeId: params.nodeId,
         startedAt: started.toISOString(),
         finishedAt: now().toISOString(),
         ...summary,
       });
+      await mirror.finalized();
     },
   };
 }

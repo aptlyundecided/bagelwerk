@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { FlowSupervisorArtifactPaths, FlowSupervisorLedgerEntry, FlowSupervisorReport } from "../types";
+import { recordSupervisorReport } from "../../records/mirror/hooks";
 import { renderFlowSupervisorSummary } from "../reporting/renderSupervisorSummary";
 
 export function flowSupervisorArtifactPaths(rootDir: string): FlowSupervisorArtifactPaths {
@@ -40,6 +41,11 @@ export async function writeFlowSupervisorArtifacts(args: {
   await writeJson(report.artifacts.recoveryAttemptsPath, { schemaVersion: report.schemaVersion, attempts: report.recoveryAttempts });
   await writeJson(report.artifacts.remedyRecommendationsPath, { schemaVersion: report.schemaVersion, recommendations: report.recommendations });
   await writeFile(report.artifacts.summaryPath, renderFlowSupervisorSummary(report), "utf8");
+  await recordSupervisorReport({
+    rootDir: report.artifacts.rootDir,
+    report: report as unknown as Record<string, unknown>,
+    ledger: args.ledger as unknown as Array<Record<string, unknown>>,
+  });
 }
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {

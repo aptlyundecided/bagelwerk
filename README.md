@@ -102,6 +102,8 @@ Flow Smithy runs produce artifacts: durable runtime files such as Node inputs an
 
 Artifacts are not optional scratch files. Their location is part of the Flow runtime contract: downstream Nodes read upstream results from artifact paths, runner and Workbench tools inspect them, and failed runs are debugged or resumed from them. If the artifact root moves or is deleted unexpectedly, Flows can lose their handoff state.
 
+Every run is also recorded in the **Record Store** (`src/core/records/`), a Postgres-compatible database (embedded PGlite at `.artifacts/records/`) that agents and humans can search: `npm run records -- search "…"`. The store decides which run is accepted; `accepted/` directories are rebuilt from it when missing or stale. Run `npm run records -- serve` when several processes run agents at once.
+
 By default, generated runtime state belongs under the repo-local `.artifacts/` directory. Platform Tour run artifacts default to `.artifacts/platform-tour/`. External Flow Runner workspaces write to `.artifacts/flows/external/`.
 
 > **Warning**: Do not commit generated artifact contents. Treat `.artifacts/` as local runtime state unless a specific artifact has been intentionally promoted into tracked documentation or fixtures.

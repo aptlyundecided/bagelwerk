@@ -1,5 +1,8 @@
 import { beginFlowRunnerFlowRun, defaultFlowRunnerArtifactRoot, persistFlowRunnerRunTree, type FlowRunnerRunTree, type FlowRunnerRunTreeNode } from "../../runRecords";
 import type { FlowRunnerEvent } from "../../events";
+import path from "node:path";
+
+import { bindRecordsEvents } from "../../../records/mirror/recordsMirror";
 import { emitFlowRunnerEvent } from "../events/eventSink";
 import { resolveUnhandledFailureIfNeeded } from "../recovery/failureFallback";
 import { runFlowRunnerMiddlewareHook } from "../middleware/middleware";
@@ -15,6 +18,7 @@ export async function runResolvedFlowRunnerFlow<TInput>(params: RunResolvedFlowR
   const record = await beginFlowRunnerFlowRun({ artifactRoot, sessionId: params.sessionId, flowId: params.resolvedFlow.resolved.rootFlowId });
   const startedAt = new Date().toISOString();
   const events: FlowRunnerEvent[] = [];
+  bindRecordsEvents(events, path.resolve(record.runDir));
   const forwardEvent = (event: FlowRunnerEvent) => emitFlowRunnerEvent({ events, event, onEvent: params.onEvent, log: params.log });
   forwardEvent({ type: "flow-start", flowId: params.resolvedFlow.resolved.rootFlowId, sessionId: params.sessionId, mode, runDir: record.runDir, at: startedAt });
   await runFlowRunnerMiddlewareHook(params.middlewares, "beforeFlow", {

@@ -2,6 +2,12 @@ import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { ExecutionPolicy, ExecutionPolicySource, FlowRuntimeEvent } from "../flows/config";
+import { recordNodeAccepted, recordNodeRunBegun, recordNodeRunPersisted } from "../records/mirror/hooks";
+
+/** <workspaceRoot>/<session>/<node>/runs/run-NNN */
+function workspaceRootFromRunDir(runDir: string): string {
+  return path.resolve(runDir, "..", "..", "..", "..");
+}
 
 export type FlowWorkbenchAcceptanceActorKind = "user" | "agent";
 
@@ -123,6 +129,7 @@ export async function beginWorkbenchRun(params: {
   await mkdir(runDir, { recursive: true });
   await rm(latestDir, { recursive: true, force: true });
   await mkdir(latestDir, { recursive: true });
+  recordNodeRunBegun({ artifactRoot: params.workspaceRoot, source: "workbench", record: { sessionId: params.sessionId, flowId: params.flowId, qualifiedNodePath: params.qualifiedNodePath, runDir } });
 
   return {
     sessionId: params.sessionId,
@@ -168,6 +175,16 @@ export async function persistWorkbenchSidecars(params: {
   await cp(params.record.artifactExistencePath, path.join(params.record.latestDir, path.basename(params.record.artifactExistencePath)), { recursive: false });
   await cp(params.record.flowEventsPath, path.join(params.record.latestDir, path.basename(params.record.flowEventsPath)), { recursive: false });
   await cp(params.record.resultPath, path.join(params.record.latestDir, path.basename(params.record.resultPath)), { recursive: false });
+  await recordNodeRunPersisted({
+    artifactRoot: workspaceRootFromRunDir(params.record.runDir),
+    source: "workbench",
+    record: params.record,
+    launchSnapshot: params.launchSnapshot,
+    artifactEvents: params.artifactEvents,
+    artifactExistence: params.artifactExistence,
+    events: params.flowEvents ?? [],
+    result: params.result,
+  });
 }
 
 export async function acceptWorkbenchRun(params: {
@@ -184,6 +201,14 @@ export async function acceptWorkbenchRun(params: {
     await cp(params.record.flowEventsPath, path.join(params.record.acceptedDir, path.basename(params.record.flowEventsPath)), { recursive: false });
   }
   await writeFile(path.join(params.record.acceptedDir, "accepted-selection.json"), `${JSON.stringify(params.acceptance, null, 2)}\n`, "utf8");
+  await recordNodeAccepted({
+    artifactRoot: workspaceRootFromRunDir(params.record.runDir),
+    sessionId: params.record.sessionId,
+    nodePath: params.record.qualifiedNodePath,
+    runDir: params.record.runDir,
+    emittedArtifacts: params.emittedArtifacts,
+    acceptance: params.acceptance,
+  });
 }
 
 export async function fileExists(filePath: string): Promise<boolean> {

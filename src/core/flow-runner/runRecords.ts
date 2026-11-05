@@ -2,6 +2,16 @@ import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { ExecutionPolicy, ExecutionPolicySource } from "../flows/config";
+import {
+  artifactRootFromFlowRunDir,
+  artifactRootFromNodeRunDir,
+  recordFlowRunBegun,
+  recordFlowRunPersisted,
+  recordNodeAccepted,
+  recordNodeRunBegun,
+  recordNodeRunPersisted,
+} from "../records/mirror/hooks";
+import { withDirLock } from "../records/materialize/dirLock";
 
 export type FlowRunnerAcceptanceActorKind = "user" | "agent";
 
@@ -183,6 +193,7 @@ export async function beginFlowRunnerNodeRun(params: {
   await mkdir(runDir, { recursive: true });
   await rm(latestDir, { recursive: true, force: true });
   await mkdir(latestDir, { recursive: true });
+  recordNodeRunBegun({ artifactRoot: params.artifactRoot, record: { sessionId: params.sessionId, flowId: params.flowId, qualifiedNodePath: params.qualifiedNodePath, runDir } });
 
   return {
     sessionId: params.sessionId,
@@ -210,6 +221,7 @@ export async function beginFlowRunnerFlowRun(params: {
   await mkdir(runDir, { recursive: true });
   await rm(latestDir, { recursive: true, force: true });
   await mkdir(latestDir, { recursive: true });
+  recordFlowRunBegun({ artifactRoot: params.artifactRoot, sessionId: params.sessionId, flowId: params.flowId, runDir });
   return {
     sessionId: params.sessionId,
     flowId: params.flowId,
@@ -247,6 +259,14 @@ export async function persistFlowRunnerNodeSidecars(params: {
   await writeJsonAndCopyToLatest({ filePath: params.record.artifactExistencePath, latestDir: params.record.latestDir, value: params.artifactExistence });
   await writeJsonAndCopyToLatest({ filePath: params.record.eventsPath, latestDir: params.record.latestDir, value: { schemaVersion: 1, events: params.events ?? [] } });
   await writeJsonAndCopyToLatest({ filePath: params.record.resultPath, latestDir: params.record.latestDir, value: params.result });
+  await recordNodeRunPersisted({
+    artifactRoot: artifactRootFromNodeRunDir(params.record.runDir),
+    record: params.record,
+    launchSnapshot: params.launchSnapshot,
+    artifactEvents: params.artifactEvents,
+    artifactExistence: params.artifactExistence,
+    result: params.result,
+  });
 }
 
 export async function acceptFlowRunnerNodeRun(params: {
@@ -267,6 +287,15 @@ export async function acceptFlowRunnerNodeRun(params: {
       acceptance: { ...params.acceptance, aliasForQualifiedNodePath: params.record.qualifiedNodePath },
     });
   }
+  await recordNodeAccepted({
+    artifactRoot: params.artifactRoot,
+    sessionId: params.sessionId,
+    nodePath: params.record.qualifiedNodePath,
+    runDir: params.record.runDir,
+    nodeId: params.nodeId,
+    emittedArtifacts: params.emittedArtifacts,
+    acceptance: params.acceptance,
+  });
 }
 
 async function writeAcceptedSurface(params: {
@@ -274,12 +303,16 @@ async function writeAcceptedSurface(params: {
   emittedArtifacts: Array<{ canonicalPath: string; relativePath: string }>;
   acceptance: FlowRunnerAcceptanceRecord;
 }): Promise<void> {
-  await rm(params.acceptedDir, { recursive: true, force: true });
-  await mkdir(params.acceptedDir, { recursive: true });
-  for (const artifact of params.emittedArtifacts) {
-    await copyFlowRunnerArtifactToSurface(artifact.canonicalPath, params.acceptedDir, artifact.relativePath);
-  }
-  await writeFile(path.join(params.acceptedDir, "accepted-selection.json"), `${JSON.stringify(params.acceptance, null, 2)}\n`, "utf8");
+  // Same lock as Record Store restores, so a concurrent restore never interleaves with this write.
+  const outcome = await withDirLock(params.acceptedDir, async () => {
+    await rm(params.acceptedDir, { recursive: true, force: true });
+    await mkdir(params.acceptedDir, { recursive: true });
+    for (const artifact of params.emittedArtifacts) {
+      await copyFlowRunnerArtifactToSurface(artifact.canonicalPath, params.acceptedDir, artifact.relativePath);
+    }
+    await writeFile(path.join(params.acceptedDir, "accepted-selection.json"), `${JSON.stringify(params.acceptance, null, 2)}\n`, "utf8");
+  }, { waitMs: 120_000 });
+  if (outcome === "busy") throw new Error(`accepted surface ${params.acceptedDir} stayed locked for 120s (stale ${path.basename(params.acceptedDir)}.sync.lock?)`);
 }
 
 export async function persistFlowRunnerRunTree(params: {
@@ -289,6 +322,7 @@ export async function persistFlowRunnerRunTree(params: {
 }): Promise<void> {
   await writeJsonAndCopyToLatest({ filePath: params.record.runTreePath, latestDir: params.record.latestDir, value: params.runTree });
   await writeJsonAndCopyToLatest({ filePath: params.record.eventsPath, latestDir: params.record.latestDir, value: { schemaVersion: 1, events: params.events ?? [] } });
+  await recordFlowRunPersisted({ artifactRoot: artifactRootFromFlowRunDir(params.record.runDir), runDir: params.record.runDir, runTree: params.runTree });
 }
 
 export async function flowRunnerFileExists(filePath: string): Promise<boolean> {

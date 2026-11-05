@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { requireNodeTypeEntry, type NodeRegistry } from "../../../nodes/config";
+import { syncAcceptedSurfaceFromRecords } from "../../../records/materialize/materialize";
 import { flowRunnerAcceptedDir, flowRunnerFileExists, flowRunnerLatestDir, type FlowRunnerRunTreeNode } from "../../runRecords";
 import type { FlowRunnerResolvedFlow } from "../api/contracts";
 
@@ -17,6 +18,7 @@ export async function acceptedTreeNodeForResume<TInput>(params: {
   const parsedParams = entry.validateParams(target.node.params);
   const expectedArtifacts = entry.describeArtifacts?.({ nodeId: target.node.nodeId, params: parsedParams })?.outputs ?? [];
   const acceptedDir = flowRunnerAcceptedDir(params.artifactRoot, params.sessionId, params.qualifiedNodePath);
+  await syncAcceptedSurfaceFromRecords({ artifactRoot: params.artifactRoot, sessionId: params.sessionId, nodePath: params.qualifiedNodePath, acceptedDir }).catch(() => "no-store");
   const acceptedSelectionPath = path.join(acceptedDir, "accepted-selection.json");
   if (!await flowRunnerFileExists(acceptedSelectionPath)) return undefined;
 
