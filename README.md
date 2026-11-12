@@ -21,6 +21,8 @@ Its simple **Flows** and **Nodes** orchestration handles the hard parts—like s
 
 *(For a deeper dive into our architecture and terminology, see [CONTEXT.md](./CONTEXT.md) and [UBIQUITOUS_LANGUAGE.md](./UBIQUITOUS_LANGUAGE.md)).*
 
+Explore the **[Bagelwerk intent map](docs/intent-map/README.md)** for agreed behavior and open questions.
+
 ## 🚀 Quick Start
 
 New here, or sharing with a colleague? Start with **[GETTING-STARTED.md](./GETTING-STARTED.md)** — run the Platform Tour and build your first Flow from a fresh clone.

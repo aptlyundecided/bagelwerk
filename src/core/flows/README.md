@@ -80,3 +80,7 @@ Resume/fork execution is different from normal orchestration: every resolved Nod
 ## Invariant
 
 **Flows** are structural/scheduling boundaries. Contracts belong to **Nodes**. Nested Flow composition keeps artifacts Node-scoped; use Transition Nodes for nontrivial handoffs between child Flows. Flow runtime events are observability derived from the flat resolved graph, not Flow-level output contracts.
+
+## Partial queue outcomes
+
+Parallel continuation remains permitted. Its result records `continuation` with a reason and unsuccessful Node paths. Queue items with a completed final Node but unsuccessful retained outputs are reported as `partial`, with separate partial counts. `stopOnFirstFailure` still applies to failed/timed-out items, not tolerated partial work. See [recovery intent contracts](../flow-runner/intent-contracts.md).

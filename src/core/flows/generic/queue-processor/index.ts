@@ -6,7 +6,7 @@ import { createStaticFlowNodeLibrary, type FlowNodeLibrary } from "../../config/
 import { runConfiguredFlow, type RunConfiguredFlowOptions } from "../../config/runConfiguredFlow";
 import { runConfiguredFlowWithParallelFlows, type ParallelFlowGroup } from "../../config/runParallelConfiguredFlow";
 
-export type QueueProcessorWorkItemStatus = "completed" | "failed" | "timed_out";
+export type QueueProcessorWorkItemStatus = "completed" | "partial" | "failed" | "timed_out";
 
 export type QueueProcessorWorkItem<TItem, TInput> = {
   id: string;
@@ -34,6 +34,7 @@ export type QueueProcessorRunResult<TItem, TInput> = {
   status: QueueProcessorWorkItemStatus;
   total: number;
   completed: number;
+  partial: number;
   failed: number;
   timedOut: number;
   startedAt: string;
@@ -46,6 +47,7 @@ export type QueueProcessorProgressEvent<TItem> = {
   queueId: string;
   total: number;
   completed: number;
+  partial: number;
   failed: number;
   timedOut: number;
   running: number;
@@ -79,18 +81,23 @@ function normalizeNodeLibrary(nodeLibrary: FlowNodeLibrary | unknown[] | undefin
 
 function resultStatus<TInput>(result: NodeGraphRunResult<TInput>): QueueProcessorWorkItemStatus {
   const last = result.history[result.history.length - 1];
-  return last?.nodeStatus ?? "failed";
+  if (last?.nodeStatus !== "completed") return last?.nodeStatus ?? "failed";
+  const incomplete = Object.values(result.working.outputsByNodeId).some(output => output.status !== "completed");
+  const partialRecovery = result.history.some(entry => entry.recovery?.disposition === "continue_partial");
+  return incomplete || partialRecovery ? "partial" : "completed";
 }
 
 function queueStatus(results: Array<QueueProcessorWorkItemResult<unknown, unknown>>): QueueProcessorWorkItemStatus {
   if (results.some((result) => result.status === "failed")) return "failed";
   if (results.some((result) => result.status === "timed_out")) return "timed_out";
+  if (results.some((result) => result.status === "partial")) return "partial";
   return "completed";
 }
 
-function countResults<TItem, TInput>(results: Array<QueueProcessorWorkItemResult<TItem, TInput> | undefined>): Pick<QueueProcessorProgressEvent<TItem>, "completed" | "failed" | "timedOut"> {
+function countResults<TItem, TInput>(results: Array<QueueProcessorWorkItemResult<TItem, TInput> | undefined>): Pick<QueueProcessorProgressEvent<TItem>, "completed" | "partial" | "failed" | "timedOut"> {
   return {
     completed: results.filter((result) => result?.status === "completed").length,
+    partial: results.filter((result) => result?.status === "partial").length,
     failed: results.filter((result) => result?.status === "failed").length,
     timedOut: results.filter((result) => result?.status === "timed_out").length,
   };
@@ -109,6 +116,7 @@ function emitQueueProgress<TItem, TInput>(params: {
     queueId: params.queueId,
     total: params.total,
     completed: counts.completed,
+    partial: counts.partial,
     failed: counts.failed,
     timedOut: counts.timedOut,
     running: params.running,
@@ -178,7 +186,7 @@ export async function runQueueProcessorFlow<TItem, TInput>(
         durationMs: finishedAtMs - workItemStartedAtMs,
         result,
       };
-      if (status !== "completed" && params.stopOnFirstFailure) stopRequested = true;
+      if ((status === "failed" || status === "timed_out") && params.stopOnFirstFailure) stopRequested = true;
       runner.emitLine(formatCoreRuntimeLine("flow", `queue work-item done queue=${params.queueId} index=${index} id=${workItem.id} status=${status}`));
     } catch (error) {
       const finishedAtMs = Date.now();
@@ -235,9 +243,10 @@ export async function runQueueProcessorFlow<TItem, TInput>(
   const finalResults = results as Array<QueueProcessorWorkItemResult<TItem, TInput>>;
   const status = queueStatus(finalResults as Array<QueueProcessorWorkItemResult<unknown, unknown>>);
   const completed = finalResults.filter((result) => result.status === "completed").length;
+  const partial = finalResults.filter((result) => result.status === "partial").length;
   const failed = finalResults.filter((result) => result.status === "failed").length;
   const timedOut = finalResults.filter((result) => result.status === "timed_out").length;
-  runner.emitLine(formatCoreRuntimeLine("flow", `queue done id=${params.queueId} status=${status} completed=${completed} failed=${failed} timed_out=${timedOut}`));
+  runner.emitLine(formatCoreRuntimeLine("flow", `queue done id=${params.queueId} status=${status} completed=${completed} partial=${partial} failed=${failed} timed_out=${timedOut}`));
   emitQueueProgress({ queueId: params.queueId, total: params.workItems.length, results: finalResults, running: 0, onProgress: params.onProgress });
 
   return {
@@ -245,6 +254,7 @@ export async function runQueueProcessorFlow<TItem, TInput>(
     status,
     total: params.workItems.length,
     completed,
+    partial,
     failed,
     timedOut,
     startedAt,

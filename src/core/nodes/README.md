@@ -28,3 +28,7 @@ Canonical **Node** config/runtime surface.
   - **Notification** (param `notifyOnWait`, default `true`): fires a macOS Notification Center banner + sound when the node starts waiting, so the user knows to come back.
   - See `src/core/notifications/` for the underlying primitives.
 - `core.web-search` (`generic/web-search/`) calls OpenRouter's `perplexity/sonar-pro` by default and emits `web-search.json` plus `web-search.md` so downstream Nodes can depend on a cited research artifact instead of asking an agent CLI to browse implicitly.
+
+## Recovery evidence
+
+Graph history preserves an `originalResult` and recovery disposition/rationale when a resolver replaces an unsuccessful result. A `retry_node` resolver response remains a request; graph routing owns whether another attempt occurs. See [recovery intent contracts](../flow-runner/intent-contracts.md).

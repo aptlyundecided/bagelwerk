@@ -1,0 +1,642 @@
+{
+  "type": "graph",
+  "title": "Bagelwerk — intent map",
+  "subtitle": "Parent → more specific intent • Click a node for its full statement • Endorsed does not mean verified",
+  "meta": {
+    "mode": "panel",
+    "source": "Infinity Crew knowledge MCP · saved intent records",
+    "snapshot": "2026-11-12T15:54:30.899Z"
+  },
+  "statuses": {
+    "endorsed": "#0f766e"
+  },
+  "nodes": [
+    {
+      "id": "d1988753-8874-4016-bf4e-888fa0c38a06",
+      "label": "Dependable, inspectable work",
+      "status": "endorsed",
+      "kind": "milestone",
+      "detail": {
+        "summary": "Turn defined workflows into dependable, inspectable work.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "d1988753-8874-4016-bf4e-888fa0c38a06"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "Root"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "584dc4a1-5163-4c09-b87b-ddebb9bd6b5f",
+      "label": "Accessible evidence",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "Preserve accessible evidence of what happened.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "584dc4a1-5163-4c09-b87b-ddebb9bd6b5f"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "d1988753-8874-4016-bf4e-888fa0c38a06"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "a916f0aa-a5a2-4ee4-908a-9d12763d2d8f",
+      "label": "One database owner; shared access",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "Processes sharing a Bagelwerk records directory should use a single PGlite owner and share access through its server; when the store is unavailable, work should continue through file records and recover store access when possible.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "a916f0aa-a5a2-4ee4-908a-9d12763d2d8f"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "584dc4a1-5163-4c09-b87b-ddebb9bd6b5f"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          },
+          {
+            "k": "Open questions",
+            "v": "Is temporary files-only operation acceptable, or should shared-store availability be required?\nIs recovery on the next access sufficient, or is background recovery expected?"
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "99805340-2b3d-4d0d-a3fd-90e6f523f2f3",
+      "label": "Easy workflow authoring",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "Make workflows straightforward to create and run.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "99805340-2b3d-4d0d-a3fd-90e6f523f2f3"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "d1988753-8874-4016-bf4e-888fa0c38a06"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "5e199df2-038c-49f7-a724-9f25b7d55675",
+      "label": "Working custom-directory starters",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "The advertised flow:init --dir option creates a starter whose generated imports and run instructions match its actual location.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "5e199df2-038c-49f7-a724-9f25b7d55675"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "99805340-2b3d-4d0d-a3fd-90e6f523f2f3"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "e5320652-716a-45fd-9de1-041d358f652a",
+      "label": "Accurate execution outcomes",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "Execute required work and report its outcome accurately.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "e5320652-716a-45fd-9de1-041d358f652a"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "d1988753-8874-4016-bf4e-888fa0c38a06"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "b08f8340-4dba-43af-8a7e-56bb842f9148",
+      "label": "Recovery decides the next action",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "A Node failure is an observation, not automatically a workflow stop decision. Recovery policy determines whether to retry, wait, continue with acceptable partial results, or end the run, and the reported state explains the actual next action.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "b08f8340-4dba-43af-8a7e-56bb842f9148"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "e5320652-716a-45fd-9de1-041d358f652a"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          },
+          {
+            "k": "Outcome classification",
+            "v": "Deferred; retain evidence now, define outcome types and handling later."
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "1a91ec83-68f8-4ce1-b099-a6b9270c2549",
+      "label": "Run ended — unresolved",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "When a run ends without satisfying its required outcomes, Bagelwerk clearly identifies what remains unresolved and whether another attempt requires intervention. It must not imply that a retry is underway.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "1a91ec83-68f8-4ce1-b099-a6b9270c2549"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "b08f8340-4dba-43af-8a7e-56bb842f9148"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          },
+          {
+            "k": "Open questions",
+            "v": "Which unsuccessful outcome types should end a run?\nWhat intervention is required to retry or resume each type?"
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "376b9109-fbb7-4cea-a591-43ce6833fe71",
+      "label": "Retry in progress",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "When the executing component retries work, Bagelwerk makes that retry visible: what is being retried, why, and which attempt is underway. An unsuccessful attempt does not imply the overall run has stopped.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "376b9109-fbb7-4cea-a591-43ce6833fe71"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "b08f8340-4dba-43af-8a7e-56bb842f9148"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          },
+          {
+            "k": "scope",
+            "v": "Visibility and terminology, not a new retry mechanism"
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "6742b5b0-13bf-46e4-bfd4-a3073b8d55eb",
+      "label": "Continue with partial results",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "Bagelwerk may continue with partial results for now. It should distinguish types of unsuccessful outcomes and have Nodes respond appropriately to the outcome type, while making missing results and the decision to continue visible.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "6742b5b0-13bf-46e4-bfd4-a3073b8d55eb"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "b08f8340-4dba-43af-8a7e-56bb842f9148"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          },
+          {
+            "k": "currentDecision",
+            "v": "Allow partial continuation for now."
+          },
+          {
+            "k": "currentFocus",
+            "v": "Retain evidence for later investigation; do not require classification or new type-specific handling now."
+          },
+          {
+            "k": "Outcome classification",
+            "v": "Deferred; retain evidence now, define outcome types and handling later."
+          },
+          {
+            "k": "Open questions",
+            "v": "Which types of unsuccessful outcomes must be distinguished?\nHow should a Node respond to each type, including an unknown type?\nWhich types permit continuation and which require retry, input, or ending the run?"
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "71c45f58-0348-4cde-9089-13cb4b9ff3e7",
+      "label": "Investigate unsuccessful work",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "When work is unsuccessful, retain enough context to investigate afterward: what was attempted, what happened, available outputs, and whether execution retried, waited, continued, or ended.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "71c45f58-0348-4cde-9089-13cb4b9ff3e7"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "b08f8340-4dba-43af-8a7e-56bb842f9148"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          },
+          {
+            "k": "classificationPolicy",
+            "v": "Deferred by user; do not require outcome categorization before retaining evidence."
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "7e7bfc7e-0e80-4c44-a6d3-f9f28f534018",
+      "label": "Waiting for input",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "When work cannot continue without a response, Bagelwerk makes clear what input is needed, who or what must provide it, and what will resume afterward. Waiting is distinct from failure.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "7e7bfc7e-0e80-4c44-a6d3-f9f28f534018"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "b08f8340-4dba-43af-8a7e-56bb842f9148"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          },
+          {
+            "k": "scope",
+            "v": "One state for human and system responses; response source is descriptive detail, not separate lifecycle states."
+          },
+          {
+            "k": "deferred",
+            "v": "Separate waiting states may be considered later; no expansion required now."
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "9561c726-5130-4ab8-bdc1-8b149e047f76",
+      "label": "Honest parallel outcomes",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "Parallel execution preserves branch outcomes and recovery decisions. It may continue with explicitly acceptable partial results, while reporting unresolved required outcomes instead of silently implying full success.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "9561c726-5130-4ab8-bdc1-8b149e047f76"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "b08f8340-4dba-43af-8a7e-56bb842f9148"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "b4c5a5e1-40b5-4c39-9d7b-7c5e171a7a96",
+      "label": "Start blocked",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "When a prerequisite prevents work from starting, Bagelwerk explains what blocked it, what must change, and how to try again. It distinguishes work that never started from work that ran unsuccessfully.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "b4c5a5e1-40b5-4c39-9d7b-7c5e171a7a96"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "b08f8340-4dba-43af-8a7e-56bb842f9148"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          },
+          {
+            "k": "Open questions",
+            "v": "Which prerequisites should block execution rather than permit recovery or partial continuation?"
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    },
+    {
+      "id": "c3622432-2cb0-45eb-bd13-6d417eb61804",
+      "label": "Explain timeout and cancellation",
+      "status": "endorsed",
+      "kind": "item",
+      "detail": {
+        "summary": "When a Node times out, callers can determine whether its work has stopped, and supported handlers can cooperate with cancellation before retries or downstream work proceed.",
+        "fields": [
+          {
+            "k": "Intent ID",
+            "v": "c3622432-2cb0-45eb-bd13-6d417eb61804"
+          },
+          {
+            "k": "Intent status",
+            "v": "endorsed"
+          },
+          {
+            "k": "Parent intent",
+            "v": "e5320652-716a-45fd-9de1-041d358f652a"
+          },
+          {
+            "k": "Interpretation",
+            "v": "Endorsed describes agreed intent, not proof of implementation."
+          }
+        ],
+        "tags": [
+          "Bagelwerk",
+          "intent"
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "d1988753-8874-4016-bf4e-888fa0c38a06",
+      "to": "584dc4a1-5163-4c09-b87b-ddebb9bd6b5f",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "584dc4a1-5163-4c09-b87b-ddebb9bd6b5f",
+      "to": "a916f0aa-a5a2-4ee4-908a-9d12763d2d8f",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "d1988753-8874-4016-bf4e-888fa0c38a06",
+      "to": "99805340-2b3d-4d0d-a3fd-90e6f523f2f3",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "99805340-2b3d-4d0d-a3fd-90e6f523f2f3",
+      "to": "5e199df2-038c-49f7-a724-9f25b7d55675",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "d1988753-8874-4016-bf4e-888fa0c38a06",
+      "to": "e5320652-716a-45fd-9de1-041d358f652a",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "e5320652-716a-45fd-9de1-041d358f652a",
+      "to": "b08f8340-4dba-43af-8a7e-56bb842f9148",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "b08f8340-4dba-43af-8a7e-56bb842f9148",
+      "to": "1a91ec83-68f8-4ce1-b099-a6b9270c2549",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "b08f8340-4dba-43af-8a7e-56bb842f9148",
+      "to": "376b9109-fbb7-4cea-a591-43ce6833fe71",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "b08f8340-4dba-43af-8a7e-56bb842f9148",
+      "to": "6742b5b0-13bf-46e4-bfd4-a3073b8d55eb",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "b08f8340-4dba-43af-8a7e-56bb842f9148",
+      "to": "71c45f58-0348-4cde-9089-13cb4b9ff3e7",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "b08f8340-4dba-43af-8a7e-56bb842f9148",
+      "to": "7e7bfc7e-0e80-4c44-a6d3-f9f28f534018",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "b08f8340-4dba-43af-8a7e-56bb842f9148",
+      "to": "9561c726-5130-4ab8-bdc1-8b149e047f76",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "b08f8340-4dba-43af-8a7e-56bb842f9148",
+      "to": "b4c5a5e1-40b5-4c39-9d7b-7c5e171a7a96",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    },
+    {
+      "from": "e5320652-716a-45fd-9de1-041d358f652a",
+      "to": "c3622432-2cb0-45eb-bd13-6d417eb61804",
+      "kind": "relates",
+      "detail": {
+        "summary": "The child refines the parent intent. This is an intent hierarchy, not execution order."
+      }
+    }
+  ]
+}

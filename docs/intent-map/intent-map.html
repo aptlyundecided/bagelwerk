@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bagelwerk — intent map · graph</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --bar:#ffffffcc; --surface:#fff; --border:#dde2e8; --ink:#14181d; --muted:#5a6572; --faint:#8794a2;
+    --accent:#0f766e; --node-fill:#ffffff; --node-stroke:#c2cbd4; --edge:#8794a2; --tint:#0f766e14;
+    --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace; --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){ :root{
+    --bg:#0d1014; --bar:#14181ecc; --surface:#14181e; --border:#262d37; --ink:#e7ebf0; --muted:#8b97a5; --faint:#6a7686;
+    --accent:#2dd4bf; --node-fill:#1a2029; --node-stroke:#39434f; --edge:#6a7686; --tint:#2dd4bf1f;
+  } }
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--mono)}
+  #bar{position:fixed;inset:0 0 auto 0;height:48px;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--bar);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);z-index:20}
+  #bar .eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  #bar .t{font-size:14px;font-weight:600;margin-right:auto;display:flex;flex-direction:column;gap:1px;line-height:1.2;min-width:0}
+  #bar .t .ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(52vw,640px)}
+  #info{font-size:15px;line-height:1;padding:0 9px}
+  #about{position:fixed;top:54px;left:14px;max-width:min(560px,86vw);background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 34px rgba(0,0,0,.18);padding:12px 14px 13px;font-family:var(--sans);font-size:13px;line-height:1.55;color:var(--ink);z-index:30}
+  #about[hidden]{display:none}
+  #about .about-h{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  button{font-family:var(--mono);font-size:13px;color:var(--ink);background:transparent;border:1px solid var(--border);border-radius:8px;height:30px;min-width:34px;padding:0 10px;cursor:pointer}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  #pct{font-size:12px;color:var(--muted);min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+  #stage{position:absolute;inset:48px 0 0 0;overflow:hidden;cursor:grab;touch-action:none;outline:none}
+  #stage.drag{cursor:grabbing}
+  #canvas{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+  #canvas.animate{transition:transform .5s cubic-bezier(.22,.61,.36,1)}
+  @media (prefers-reduced-motion: reduce){ #canvas.animate{transition:none} }
+  svg.diagram{display:block;width:1763px;height:380px}
+  /* nodes */
+  .node{cursor:pointer}
+  .node-shape{fill:var(--node-fill);stroke:var(--node-stroke);stroke-width:1.5px}
+  .node-shape.marker{fill:var(--ink);stroke:none}
+  .node-label{fill:var(--ink);font-family:var(--mono);font-size:13px;text-anchor:middle;dominant-baseline:middle;pointer-events:none}
+  .node-label.outside{fill:var(--muted);font-size:12px}
+  .node:hover .node-shape{stroke:var(--accent)}
+  .node.sel .node-shape{stroke:var(--accent);stroke-width:3px}
+  .node.sel .node-shape:not(.marker){fill:var(--tint)}
+  .kind-start .node-shape,.kind-end .node-shape,.kind-initial .node-shape,.kind-final .node-shape{fill:var(--tint);stroke:var(--accent)}
+  .kind-decision .node-shape,.kind-loop .node-shape{stroke:#e0982a}
+  .kind-externalSystem .node-shape,.kind-externalEntity .node-shape,.kind-external .node-shape{fill:color-mix(in srgb,var(--muted) 15%,var(--node-fill))}
+  .kind-person .node-shape{fill:color-mix(in srgb,var(--accent) 14%,var(--node-fill));stroke:var(--accent)}
+  .kind-adapter .node-shape{stroke:#4f9ce0}
+  .cyl-lip{fill:none;stroke:var(--node-stroke);stroke-width:1.5px}
+  /* edges */
+  .edge{cursor:pointer}
+  .edge-path{fill:none;stroke:var(--edge);stroke-width:1.6px}
+  .edge-path.dashed{stroke-dasharray:5 4}
+  .edge-hit,.edge-hit-box{fill:none;stroke:transparent;stroke-width:14px;pointer-events:stroke}
+  .edge-hit-box{fill:transparent;pointer-events:all}
+  .arrow-head{fill:var(--edge)}
+  .edge:hover .edge-path{stroke:var(--accent)} .edge:hover .arrow-head{fill:var(--accent)}
+  .edge.sel .edge-path{stroke:var(--accent);stroke-width:2.6px} .edge.sel .arrow-head{fill:var(--accent)}
+  .edge-label text,.edge-label-text{fill:var(--muted);font-family:var(--mono);font-size:11.5px;text-anchor:middle;dominant-baseline:middle;pointer-events:none}
+  .edge-label-bg{fill:var(--surface);opacity:.92}
+  .lifeline-line{stroke:var(--border);stroke-width:1.4px;stroke-dasharray:3 4}
+  /* panel */
+  #hint{position:fixed;left:14px;bottom:12px;font-size:11px;color:var(--muted);background:var(--bar);border:1px solid var(--border);border-radius:8px;padding:5px 9px;z-index:15}
+  #panel{position:fixed;top:48px;bottom:0;right:0;width:min(400px,92vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:-8px 0 30px rgba(0,0,0,.12);overflow:auto;transform:translateX(100%);transition:transform .18s ease;z-index:18;font-family:var(--sans)}
+  body.has-panel #panel{transform:none}
+  body.popover #panel{position:fixed;top:auto;bottom:auto;left:auto;right:auto;width:min(320px,86vw);border:1px solid var(--border);border-radius:12px;transform:none;display:none;box-shadow:0 10px 34px rgba(0,0,0,.22)}
+  body.popover.has-panel #panel{display:block}
+  .p-head{display:flex;align-items:center;gap:8px;padding:16px 16px 4px}
+  .p-name{font-family:var(--mono);font-size:16px;font-weight:600;margin:0;word-break:break-word;flex:1}
+  .p-close{border:none;min-width:28px;height:28px;color:var(--faint)}
+  .badge{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:5px;padding:2px 6px;white-space:nowrap}
+  .p-summary{color:var(--muted);font-size:14px;margin:2px 16px 12px;line-height:1.5}
+  .p-solution{color:var(--ink);font-size:14px;line-height:1.55;margin:2px 16px 12px;padding:13px 16px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));border-left:3px solid var(--accent);border-radius:10px;background:color-mix(in srgb,var(--accent) 8%,transparent)}
+  .p-label{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:14px 16px 8px;border-top:1px solid var(--border)}
+  .p-fields{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;padding:0 16px 8px;font-size:13px}
+  .p-fields .k{color:var(--faint);font-family:var(--mono);font-size:12px}
+  .p-fields .v{color:var(--ink);word-break:break-word}
+  .p-tags,.p-links,.p-neighbors{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 8px}
+  .chip{font-family:var(--mono);font-size:11.5px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:3px 9px}
+  .link,.neighbor{font-family:var(--mono);font-size:12px;height:auto;min-height:30px;padding:6px 11px;text-decoration:none;display:inline-flex;align-items:center;text-align:left;white-space:normal;line-height:1.4;max-width:100%;color:var(--accent)}
+  .p-foot{padding:14px 16px 24px;color:var(--faint);font-size:11px}
+  .badge.st{color:var(--accent)}
+  /* status channel */
+  .status-dot{stroke:var(--node-fill);stroke-width:1.5px}
+  #legend{position:fixed;right:14px;bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:60vw;font-size:11px;color:var(--muted);background:var(--bar);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:8px;padding:6px 11px;z-index:15}
+  #legend .lg-t{text-transform:uppercase;letter-spacing:.1em;color:var(--faint)}
+  #legend .lg{display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none;border-radius:5px;padding:1px 4px}
+  #legend .lg:hover{background:var(--tint)}
+  #legend .lg.off{opacity:.4;text-decoration:line-through}
+  #legend .lg-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+  body.has-panel #legend{opacity:.25}
+  /* filtering / focus */
+  #search{font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:8px;height:30px;width:150px;padding:0 10px}
+  #search:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  button.toggle.on{border-color:var(--accent);color:var(--accent);background:var(--tint)}
+  .node.dim{opacity:.13} .edge.dim{opacity:.07} .node,.edge{transition:opacity .15s ease}
+  :root{--st-endorsed:#0f766e;}.status-endorsed .node-shape:not(.marker){stroke:var(--st-endorsed);fill:color-mix(in srgb,var(--st-endorsed) 16%,var(--node-fill))}.status-endorsed .node-shape.marker{fill:var(--st-endorsed)}.status-endorsed .status-dot{fill:var(--st-endorsed)}
+</style></head><body>
+<div id="bar">
+  <span class="t"><span class="eyebrow">graph-smith · graph</span><span class="ttl" title="Bagelwerk — intent map">Bagelwerk — intent map</span></span>
+  <button id="info" title="About this diagram" aria-label="About this diagram">&#9432;</button>
+  <input id="search" type="search" placeholder="Filter… (/)" autocomplete="off" spellcheck="false" aria-label="filter nodes by label">
+  <button id="focus" class="toggle" title="Focus selection + neighbours">Focus</button>
+  <button id="out" title="Zoom out (-)">&minus;</button><span id="pct">100%</span><button id="in" title="Zoom in (+)">+</button>
+  <button id="fit" title="Fit (0)">Fit</button>
+</div>
+<div id="about" hidden><p class="about-h">About this diagram</p>Parent → more specific intent • Click a node for its full statement • Endorsed does not mean verified</div>
+<div id="stage" tabindex="0"><div id="canvas"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1763 380" width="1763" height="380" class="diagram diagram-graph"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-head" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs><g class="edges"><g class="edge kind-relates" data-edge-id="e0"><path class="edge-hit" d="M 682.5 56.0 L 682.5 80.0 L 1240.5 80.0 L 1240.5 108.0"/><path class="edge-path" d="M 682.5 56.0 L 682.5 80.0 L 1240.5 80.0 L 1240.5 108.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e1"><path class="edge-hit" d="M 1240.5 152.0 L 1240.5 204.0"/><path class="edge-path" d="M 1240.5 152.0 L 1240.5 204.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e2"><path class="edge-hit" d="M 554.5 56.0 L 554.5 80.0 L 243.5 80.0 L 243.5 108.0"/><path class="edge-path" d="M 554.5 56.0 L 554.5 80.0 L 243.5 80.0 L 243.5 108.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e3"><path class="edge-hit" d="M 243.5 152.0 L 243.5 204.0"/><path class="edge-path" d="M 243.5 152.0 L 243.5 204.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e4"><path class="edge-hit" d="M 618.5 56.0 L 618.5 108.0"/><path class="edge-path" d="M 618.5 56.0 L 618.5 108.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e5"><path class="edge-hit" d="M 660.0 152.0 L 660.0 176.0 L 907.0 176.0 L 907.0 204.0"/><path class="edge-path" d="M 660.0 152.0 L 660.0 176.0 L 907.0 176.0 L 907.0 204.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e6"><path class="edge-hit" d="M 978.5 248.0 L 978.5 282.0 L 1416.5 282.0 L 1416.5 316.0"/><path class="edge-path" d="M 978.5 248.0 L 978.5 282.0 L 1416.5 282.0 L 1416.5 316.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e7"><path class="edge-hit" d="M 1014.3 248.0 L 1014.3 272.0 L 1655.0 272.0 L 1655.0 316.0"/><path class="edge-path" d="M 1014.3 248.0 L 1014.3 272.0 L 1655.0 272.0 L 1655.0 316.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e8"><path class="edge-hit" d="M 799.8 248.0 L 799.8 272.0 L 144.0 272.0 L 144.0 316.0"/><path class="edge-path" d="M 799.8 248.0 L 799.8 272.0 L 144.0 272.0 L 144.0 316.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e9"><path class="edge-hit" d="M 835.5 248.0 L 835.5 282.0 L 452.0 282.0 L 452.0 316.0"/><path class="edge-path" d="M 835.5 248.0 L 835.5 282.0 L 452.0 282.0 L 452.0 316.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e10"><path class="edge-hit" d="M 907.0 248.0 L 907.0 316.0"/><path class="edge-path" d="M 907.0 248.0 L 907.0 316.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e11"><path class="edge-hit" d="M 942.8 248.0 L 942.8 292.0 L 1152.5 292.0 L 1152.5 316.0"/><path class="edge-path" d="M 942.8 248.0 L 942.8 292.0 L 1152.5 292.0 L 1152.5 316.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e12"><path class="edge-hit" d="M 871.3 248.0 L 871.3 292.0 L 701.5 292.0 L 701.5 316.0"/><path class="edge-path" d="M 871.3 248.0 L 871.3 292.0 L 701.5 292.0 L 701.5 316.0" marker-end="url(#arrow)"/></g><g class="edge kind-relates" data-edge-id="e13"><path class="edge-hit" d="M 577.0 152.0 L 577.0 204.0"/><path class="edge-path" d="M 577.0 152.0 L 577.0 204.0" marker-end="url(#arrow)"/></g></g><g class="nodes"><g class="node kind-milestone status-endorsed" data-node-id="d1988753-8874-4016-bf4e-888fa0c38a06" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="490.5" y="12" width="256" height="44" rx="22" ry="22"/><text class="node-label" x="618.5" y="34">Dependable, inspectable work</text><circle class="status-dot" cx="737.5" cy="21" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="584dc4a1-5163-4c09-b87b-ddebb9bd6b5f" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="1145" y="108" width="191" height="44" rx="12" ry="12"/><text class="node-label" x="1240.5" y="130">Accessible evidence</text><circle class="status-dot" cx="1327" cy="117" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="a916f0aa-a5a2-4ee4-908a-9d12763d2d8f" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="1094" y="204" width="293" height="44" rx="12" ry="12"/><text class="node-label" x="1240.5" y="226">One database owner; shared access</text><circle class="status-dot" cx="1378" cy="213" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="99805340-2b3d-4d0d-a3fd-90e6f523f2f3" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="133.5" y="108" width="220" height="44" rx="12" ry="12"/><text class="node-label" x="243.5" y="130">Easy workflow authoring</text><circle class="status-dot" cx="344.5" cy="117" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="5e199df2-038c-49f7-a724-9f25b7d55675" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="97" y="204" width="293" height="44" rx="12" ry="12"/><text class="node-label" x="243.5" y="226">Working custom-directory starters</text><circle class="status-dot" cx="381" cy="213" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="e5320652-716a-45fd-9de1-041d358f652a" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="494" y="108" width="249" height="44" rx="12" ry="12"/><text class="node-label" x="618.5" y="130">Accurate execution outcomes</text><circle class="status-dot" cx="734" cy="117" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="b08f8340-4dba-43af-8a7e-56bb842f9148" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="764" y="204" width="286" height="44" rx="12" ry="12"/><text class="node-label" x="907" y="226">Recovery decides the next action</text><circle class="status-dot" cx="1041" cy="213" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="1a91ec83-68f8-4ce1-b099-a6b9270c2549" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="1310" y="316" width="213" height="44" rx="12" ry="12"/><text class="node-label" x="1416.5" y="338">Run ended — unresolved</text><circle class="status-dot" cx="1514" cy="325" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="376b9109-fbb7-4cea-a591-43ce6833fe71" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="1567" y="316" width="176" height="44" rx="12" ry="12"/><text class="node-label" x="1655" y="338">Retry in progress</text><circle class="status-dot" cx="1734" cy="325" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="6742b5b0-13bf-46e4-bfd4-a3073b8d55eb" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="12" y="316" width="264" height="44" rx="12" ry="12"/><text class="node-label" x="144" y="338">Continue with partial results</text><circle class="status-dot" cx="267" cy="325" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="71c45f58-0348-4cde-9089-13cb4b9ff3e7" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="320" y="316" width="264" height="44" rx="12" ry="12"/><text class="node-label" x="452" y="338">Investigate unsuccessful work</text><circle class="status-dot" cx="575" cy="325" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="7e7bfc7e-0e80-4c44-a6d3-f9f28f534018" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="819" y="316" width="176" height="44" rx="12" ry="12"/><text class="node-label" x="907" y="338">Waiting for input</text><circle class="status-dot" cx="986" cy="325" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="9561c726-5130-4ab8-bdc1-8b149e047f76" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="1039" y="316" width="227" height="44" rx="12" ry="12"/><text class="node-label" x="1152.5" y="338">Honest parallel outcomes</text><circle class="status-dot" cx="1257" cy="325" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="b4c5a5e1-40b5-4c39-9d7b-7c5e171a7a96" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="628" y="316" width="147" height="44" rx="12" ry="12"/><text class="node-label" x="701.5" y="338">Start blocked</text><circle class="status-dot" cx="766" cy="325" r="5"/></g><g class="node kind-item status-endorsed" data-node-id="c3622432-2cb0-45eb-bd13-6d417eb61804" data-status="endorsed" tabindex="0" role="button"><rect class="node-shape" x="434" y="204" width="286" height="44" rx="12" ry="12"/><text class="node-label" x="577" y="226">Explain timeout and cancellation</text><circle class="status-dot" cx="711" cy="213" r="5"/></g></g></svg></div></div>
+<div id="hint">click to inspect · <b>/</b> filter · <b>Focus</b> isolates neighbours · legend toggles status · drag pan · scroll zoom · 0 fit</div>
+<div id="legend"><span class="lg-t">Status</span><span class="lg" data-status="endorsed" role="button" tabindex="0" title="Toggle endorsed"><i class="lg-dot" style="background:#0f766e"></i>endorsed</span></div>
+<aside id="panel" aria-label="inspector"></aside>
+<script id="diagram-model" type="application/json">{"type":"graph","title":"Bagelwerk — intent map","subtitle":"Parent → more specific intent • Click a node for its full statement • Endorsed does not mean verified","meta":{"mode":"panel","source":"Infinity Crew knowledge MCP · saved intent records","snapshot":"2026-11-12T15:54:30.899Z"},"statuses":[{"slug":"endorsed","label":"endorsed","color":"#0f766e"}],"nodes":{"d1988753-8874-4016-bf4e-888fa0c38a06":{"id":"d1988753-8874-4016-bf4e-888fa0c38a06","label":"Dependable, inspectable work","kind":"milestone","status":"endorsed","detail":{"summary":"Turn defined workflows into dependable, inspectable work.","fields":[{"k":"Intent ID","v":"d1988753-8874-4016-bf4e-888fa0c38a06"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"Root"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."}],"tags":["Bagelwerk","intent"]}},"584dc4a1-5163-4c09-b87b-ddebb9bd6b5f":{"id":"584dc4a1-5163-4c09-b87b-ddebb9bd6b5f","label":"Accessible evidence","kind":"item","status":"endorsed","detail":{"summary":"Preserve accessible evidence of what happened.","fields":[{"k":"Intent ID","v":"584dc4a1-5163-4c09-b87b-ddebb9bd6b5f"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"d1988753-8874-4016-bf4e-888fa0c38a06"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."}],"tags":["Bagelwerk","intent"]}},"a916f0aa-a5a2-4ee4-908a-9d12763d2d8f":{"id":"a916f0aa-a5a2-4ee4-908a-9d12763d2d8f","label":"One database owner; shared access","kind":"item","status":"endorsed","detail":{"summary":"Processes sharing a Bagelwerk records directory should use a single PGlite owner and share access through its server; when the store is unavailable, work should continue through file records and recover store access when possible.","fields":[{"k":"Intent ID","v":"a916f0aa-a5a2-4ee4-908a-9d12763d2d8f"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"584dc4a1-5163-4c09-b87b-ddebb9bd6b5f"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."},{"k":"Open questions","v":"Is temporary files-only operation acceptable, or should shared-store availability be required?\nIs recovery on the next access sufficient, or is background recovery expected?"}],"tags":["Bagelwerk","intent"]}},"99805340-2b3d-4d0d-a3fd-90e6f523f2f3":{"id":"99805340-2b3d-4d0d-a3fd-90e6f523f2f3","label":"Easy workflow authoring","kind":"item","status":"endorsed","detail":{"summary":"Make workflows straightforward to create and run.","fields":[{"k":"Intent ID","v":"99805340-2b3d-4d0d-a3fd-90e6f523f2f3"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"d1988753-8874-4016-bf4e-888fa0c38a06"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."}],"tags":["Bagelwerk","intent"]}},"5e199df2-038c-49f7-a724-9f25b7d55675":{"id":"5e199df2-038c-49f7-a724-9f25b7d55675","label":"Working custom-directory starters","kind":"item","status":"endorsed","detail":{"summary":"The advertised flow:init --dir option creates a starter whose generated imports and run instructions match its actual location.","fields":[{"k":"Intent ID","v":"5e199df2-038c-49f7-a724-9f25b7d55675"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"99805340-2b3d-4d0d-a3fd-90e6f523f2f3"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."}],"tags":["Bagelwerk","intent"]}},"e5320652-716a-45fd-9de1-041d358f652a":{"id":"e5320652-716a-45fd-9de1-041d358f652a","label":"Accurate execution outcomes","kind":"item","status":"endorsed","detail":{"summary":"Execute required work and report its outcome accurately.","fields":[{"k":"Intent ID","v":"e5320652-716a-45fd-9de1-041d358f652a"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"d1988753-8874-4016-bf4e-888fa0c38a06"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."}],"tags":["Bagelwerk","intent"]}},"b08f8340-4dba-43af-8a7e-56bb842f9148":{"id":"b08f8340-4dba-43af-8a7e-56bb842f9148","label":"Recovery decides the next action","kind":"item","status":"endorsed","detail":{"summary":"A Node failure is an observation, not automatically a workflow stop decision. Recovery policy determines whether to retry, wait, continue with acceptable partial results, or end the run, and the reported state explains the actual next action.","fields":[{"k":"Intent ID","v":"b08f8340-4dba-43af-8a7e-56bb842f9148"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"e5320652-716a-45fd-9de1-041d358f652a"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."},{"k":"Outcome classification","v":"Deferred; retain evidence now, define outcome types and handling later."}],"tags":["Bagelwerk","intent"]}},"1a91ec83-68f8-4ce1-b099-a6b9270c2549":{"id":"1a91ec83-68f8-4ce1-b099-a6b9270c2549","label":"Run ended — unresolved","kind":"item","status":"endorsed","detail":{"summary":"When a run ends without satisfying its required outcomes, Bagelwerk clearly identifies what remains unresolved and whether another attempt requires intervention. It must not imply that a retry is underway.","fields":[{"k":"Intent ID","v":"1a91ec83-68f8-4ce1-b099-a6b9270c2549"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"b08f8340-4dba-43af-8a7e-56bb842f9148"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."},{"k":"Open questions","v":"Which unsuccessful outcome types should end a run?\nWhat intervention is required to retry or resume each type?"}],"tags":["Bagelwerk","intent"]}},"376b9109-fbb7-4cea-a591-43ce6833fe71":{"id":"376b9109-fbb7-4cea-a591-43ce6833fe71","label":"Retry in progress","kind":"item","status":"endorsed","detail":{"summary":"When the executing component retries work, Bagelwerk makes that retry visible: what is being retried, why, and which attempt is underway. An unsuccessful attempt does not imply the overall run has stopped.","fields":[{"k":"Intent ID","v":"376b9109-fbb7-4cea-a591-43ce6833fe71"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"b08f8340-4dba-43af-8a7e-56bb842f9148"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."},{"k":"scope","v":"Visibility and terminology, not a new retry mechanism"}],"tags":["Bagelwerk","intent"]}},"6742b5b0-13bf-46e4-bfd4-a3073b8d55eb":{"id":"6742b5b0-13bf-46e4-bfd4-a3073b8d55eb","label":"Continue with partial results","kind":"item","status":"endorsed","detail":{"summary":"Bagelwerk may continue with partial results for now. It should distinguish types of unsuccessful outcomes and have Nodes respond appropriately to the outcome type, while making missing results and the decision to continue visible.","fields":[{"k":"Intent ID","v":"6742b5b0-13bf-46e4-bfd4-a3073b8d55eb"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"b08f8340-4dba-43af-8a7e-56bb842f9148"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."},{"k":"currentDecision","v":"Allow partial continuation for now."},{"k":"currentFocus","v":"Retain evidence for later investigation; do not require classification or new type-specific handling now."},{"k":"Outcome classification","v":"Deferred; retain evidence now, define outcome types and handling later."},{"k":"Open questions","v":"Which types of unsuccessful outcomes must be distinguished?\nHow should a Node respond to each type, including an unknown type?\nWhich types permit continuation and which require retry, input, or ending the run?"}],"tags":["Bagelwerk","intent"]}},"71c45f58-0348-4cde-9089-13cb4b9ff3e7":{"id":"71c45f58-0348-4cde-9089-13cb4b9ff3e7","label":"Investigate unsuccessful work","kind":"item","status":"endorsed","detail":{"summary":"When work is unsuccessful, retain enough context to investigate afterward: what was attempted, what happened, available outputs, and whether execution retried, waited, continued, or ended.","fields":[{"k":"Intent ID","v":"71c45f58-0348-4cde-9089-13cb4b9ff3e7"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"b08f8340-4dba-43af-8a7e-56bb842f9148"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."},{"k":"classificationPolicy","v":"Deferred by user; do not require outcome categorization before retaining evidence."}],"tags":["Bagelwerk","intent"]}},"7e7bfc7e-0e80-4c44-a6d3-f9f28f534018":{"id":"7e7bfc7e-0e80-4c44-a6d3-f9f28f534018","label":"Waiting for input","kind":"item","status":"endorsed","detail":{"summary":"When work cannot continue without a response, Bagelwerk makes clear what input is needed, who or what must provide it, and what will resume afterward. Waiting is distinct from failure.","fields":[{"k":"Intent ID","v":"7e7bfc7e-0e80-4c44-a6d3-f9f28f534018"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"b08f8340-4dba-43af-8a7e-56bb842f9148"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."},{"k":"scope","v":"One state for human and system responses; response source is descriptive detail, not separate lifecycle states."},{"k":"deferred","v":"Separate waiting states may be considered later; no expansion required now."}],"tags":["Bagelwerk","intent"]}},"9561c726-5130-4ab8-bdc1-8b149e047f76":{"id":"9561c726-5130-4ab8-bdc1-8b149e047f76","label":"Honest parallel outcomes","kind":"item","status":"endorsed","detail":{"summary":"Parallel execution preserves branch outcomes and recovery decisions. It may continue with explicitly acceptable partial results, while reporting unresolved required outcomes instead of silently implying full success.","fields":[{"k":"Intent ID","v":"9561c726-5130-4ab8-bdc1-8b149e047f76"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"b08f8340-4dba-43af-8a7e-56bb842f9148"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."}],"tags":["Bagelwerk","intent"]}},"b4c5a5e1-40b5-4c39-9d7b-7c5e171a7a96":{"id":"b4c5a5e1-40b5-4c39-9d7b-7c5e171a7a96","label":"Start blocked","kind":"item","status":"endorsed","detail":{"summary":"When a prerequisite prevents work from starting, Bagelwerk explains what blocked it, what must change, and how to try again. It distinguishes work that never started from work that ran unsuccessfully.","fields":[{"k":"Intent ID","v":"b4c5a5e1-40b5-4c39-9d7b-7c5e171a7a96"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"b08f8340-4dba-43af-8a7e-56bb842f9148"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."},{"k":"Open questions","v":"Which prerequisites should block execution rather than permit recovery or partial continuation?"}],"tags":["Bagelwerk","intent"]}},"c3622432-2cb0-45eb-bd13-6d417eb61804":{"id":"c3622432-2cb0-45eb-bd13-6d417eb61804","label":"Explain timeout and cancellation","kind":"item","status":"endorsed","detail":{"summary":"When a Node times out, callers can determine whether its work has stopped, and supported handlers can cooperate with cancellation before retries or downstream work proceed.","fields":[{"k":"Intent ID","v":"c3622432-2cb0-45eb-bd13-6d417eb61804"},{"k":"Intent status","v":"endorsed"},{"k":"Parent intent","v":"e5320652-716a-45fd-9de1-041d358f652a"},{"k":"Interpretation","v":"Endorsed describes agreed intent, not proof of implementation."}],"tags":["Bagelwerk","intent"]}}},"edges":{"e0":{"id":"e0","from":"d1988753-8874-4016-bf4e-888fa0c38a06","to":"584dc4a1-5163-4c09-b87b-ddebb9bd6b5f","kind":"relates","order":0,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e1":{"id":"e1","from":"584dc4a1-5163-4c09-b87b-ddebb9bd6b5f","to":"a916f0aa-a5a2-4ee4-908a-9d12763d2d8f","kind":"relates","order":1,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e2":{"id":"e2","from":"d1988753-8874-4016-bf4e-888fa0c38a06","to":"99805340-2b3d-4d0d-a3fd-90e6f523f2f3","kind":"relates","order":2,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e3":{"id":"e3","from":"99805340-2b3d-4d0d-a3fd-90e6f523f2f3","to":"5e199df2-038c-49f7-a724-9f25b7d55675","kind":"relates","order":3,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e4":{"id":"e4","from":"d1988753-8874-4016-bf4e-888fa0c38a06","to":"e5320652-716a-45fd-9de1-041d358f652a","kind":"relates","order":4,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e5":{"id":"e5","from":"e5320652-716a-45fd-9de1-041d358f652a","to":"b08f8340-4dba-43af-8a7e-56bb842f9148","kind":"relates","order":5,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e6":{"id":"e6","from":"b08f8340-4dba-43af-8a7e-56bb842f9148","to":"1a91ec83-68f8-4ce1-b099-a6b9270c2549","kind":"relates","order":6,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e7":{"id":"e7","from":"b08f8340-4dba-43af-8a7e-56bb842f9148","to":"376b9109-fbb7-4cea-a591-43ce6833fe71","kind":"relates","order":7,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e8":{"id":"e8","from":"b08f8340-4dba-43af-8a7e-56bb842f9148","to":"6742b5b0-13bf-46e4-bfd4-a3073b8d55eb","kind":"relates","order":8,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e9":{"id":"e9","from":"b08f8340-4dba-43af-8a7e-56bb842f9148","to":"71c45f58-0348-4cde-9089-13cb4b9ff3e7","kind":"relates","order":9,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e10":{"id":"e10","from":"b08f8340-4dba-43af-8a7e-56bb842f9148","to":"7e7bfc7e-0e80-4c44-a6d3-f9f28f534018","kind":"relates","order":10,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e11":{"id":"e11","from":"b08f8340-4dba-43af-8a7e-56bb842f9148","to":"9561c726-5130-4ab8-bdc1-8b149e047f76","kind":"relates","order":11,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e12":{"id":"e12","from":"b08f8340-4dba-43af-8a7e-56bb842f9148","to":"b4c5a5e1-40b5-4c39-9d7b-7c5e171a7a96","kind":"relates","order":12,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}},"e13":{"id":"e13","from":"e5320652-716a-45fd-9de1-041d358f652a","to":"c3622432-2cb0-45eb-bd13-6d417eb61804","kind":"relates","order":13,"detail":{"summary":"The child refines the parent intent. This is an intent hierarchy, not execution order."}}},"mode":"panel"}</script>
+<script>
+(function(){
+  var M = JSON.parse(document.getElementById('diagram-model').textContent);
+  if(M.mode === 'popover') document.body.classList.add('popover');
+  var ST={}; (M.statuses||[]).forEach(function(e){ ST[e.slug]=e; });
+  function slugStatus(s){ return (s||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'status'; }
+  function statusOf(raw){ return raw ? ST[slugStatus(raw)] : null; }
+  var W=1763, H=380;
+  var stage=document.getElementById('stage'), canvas=document.getElementById('canvas'), pct=document.getElementById('pct'), panel=document.getElementById('panel');
+  var s=1, tx=0, ty=0, animT=null;
+  function apply(){ canvas.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')'; pct.textContent=Math.round(s*100)+'%'; }
+  // Smoothly glide the next transform change (used for click-to-recenter), then drop the transition
+  // so drag-pan / wheel-zoom stay instant.
+  function glide(){ canvas.classList.add('animate'); clearTimeout(animT); animT=setTimeout(function(){ canvas.classList.remove('animate'); }, 560); }
+  function stopGlide(){ canvas.classList.remove('animate'); clearTimeout(animT); }
+  function clamp(v){ return Math.min(24, Math.max(0.05, v)); }
+  function fit(){ var r=stage.getBoundingClientRect(), pad=40; s=clamp(Math.min((r.width-pad*2)/W,(r.height-pad*2)/H,1.4)); tx=(r.width-W*s)/2; ty=Math.max(pad,(r.height-H*s)/2); apply(); }
+  function zoomAt(mx,my,ns){ ns=clamp(ns); tx=mx-(mx-tx)*(ns/s); ty=my-(my-ty)*(ns/s); s=ns; apply(); }
+  function zoomCenter(f){ var r=stage.getBoundingClientRect(); zoomAt(r.width/2, r.height/2, s*f); }
+  stage.addEventListener('wheel',function(e){ e.preventDefault(); stopGlide(); var r=stage.getBoundingClientRect(); zoomAt(e.clientX-r.left, e.clientY-r.top, s*Math.exp(-e.deltaY*0.0015)); },{passive:false});
+  var down=false, moved=false, ox, oy, sx, sy;
+  stage.addEventListener('pointerdown',function(e){ down=true; moved=false; stopGlide(); ox=e.clientX-tx; oy=e.clientY-ty; sx=e.clientX; sy=e.clientY; stage.classList.add('drag'); stage.focus(); });
+  window.addEventListener('pointermove',function(e){ if(!down)return; if(Math.abs(e.clientX-sx)>3||Math.abs(e.clientY-sy)>3) moved=true; tx=e.clientX-ox; ty=e.clientY-oy; apply(); });
+  window.addEventListener('pointerup',function(){ down=false; stage.classList.remove('drag'); });
+  document.getElementById('in').onclick=function(){ zoomCenter(1.3); };
+  document.getElementById('out').onclick=function(){ zoomCenter(1/1.3); };
+  document.getElementById('fit').onclick=fit;
+  var infoBtn=document.getElementById('info'), about=document.getElementById('about');
+  if(infoBtn&&about){
+    infoBtn.onclick=function(e){ e.stopPropagation(); about.hidden=!about.hidden; };
+    document.addEventListener('click', function(e){ if(!about.hidden && e.target!==infoBtn && !about.contains(e.target)) about.hidden=true; });
+  }
+  addEventListener('keydown',function(e){
+    if(e.target && e.target.id==='search'){ if(e.key==='Escape'){ e.target.value=''; query=''; recompute(); e.target.blur(); } return; }
+    if(e.key==='/'){ e.preventDefault(); var sb=document.getElementById('search'); sb.focus(); sb.select(); return; }
+    if(e.key==='Escape'){ if(about && !about.hidden){ about.hidden=true; return; } clearSel(); return; }
+    var step=e.shiftKey?240:64, k=e.key;
+    if(k==='ArrowLeft'){tx+=step;} else if(k==='ArrowRight'){tx-=step;} else if(k==='ArrowUp'){ty+=step;} else if(k==='ArrowDown'){ty-=step;}
+    else if(k==='+'||k==='='){zoomCenter(1.3);} else if(k==='-'||k==='_'){zoomCenter(1/1.3);} else if(k==='0'||k==='f'||k==='F'){fit();} else return;
+    e.preventDefault(); apply();
+  });
+  addEventListener('resize', function(){ if(!document.body.classList.contains('popover')) fit(); });
+
+  // --- selection + inspector ---
+  var selEl=null;
+  function el(tag,cls,txt){ var e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; }
+  function clearSel(){ if(selEl)selEl.classList.remove('sel'); selEl=null; document.body.classList.remove('has-panel'); focusId=null; if(focusOn) recompute(); }
+  function centerOn(g){
+    if(document.body.classList.contains('popover')) return;
+    try{ var b=g.getBBox(); var r=stage.getBoundingClientRect(); var cx=b.x+b.width/2, cy=b.y+b.height/2; glide(); tx=r.width/2-cx*s; ty=r.height/2-cy*s; apply(); }catch(_){}
+  }
+  function placePopover(g){
+    try{ var rect=g.getBoundingClientRect(); panel.style.left=Math.min(window.innerWidth-panel.offsetWidth-12, rect.right+10)+'px'; panel.style.top=Math.min(window.innerHeight-panel.offsetHeight-12, rect.top)+'px'; }catch(_){}
+  }
+  function select(g){
+    if(selEl)selEl.classList.remove('sel'); selEl=g; g.classList.add('sel');
+    var nid=g.getAttribute('data-node-id'), eid=g.getAttribute('data-edge-id');
+    if(nid!=null){ focusId=nid; renderNode(M.nodes[nid]); } else if(eid!=null) renderEdge(M.edges[eid]);
+    document.body.classList.add('has-panel');
+    if(document.body.classList.contains('popover')) placePopover(g); else centerOn(g);
+    if(focusOn) recompute();
+  }
+  function selectById(kind,id){ var g=canvas.querySelector('[data-'+kind+'-id="'+CSS.escape(id)+'"]'); if(g) select(g); }
+  function bind(kind){ Array.prototype.forEach.call(canvas.querySelectorAll('[data-'+kind+'-id]'), function(g){
+    g.addEventListener('click', function(e){ e.stopPropagation(); if(moved) return; select(g); });
+    g.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); select(g); } });
+  }); }
+  bind('node'); bind('edge');
+  stage.addEventListener('click', function(e){ if(e.target===stage||e.target===canvas) clearSel(); });
+
+  // --- filtering / focus (runtime-only; the baked layout never changes) ---
+  var query='', hidden={}, focusOn=false, focusId=null, nbr={};
+  for(var ek in M.edges){ var ed=M.edges[ek]; (nbr[ed.from]=nbr[ed.from]||{})[ed.to]=1; (nbr[ed.to]=nbr[ed.to]||{})[ed.from]=1; }
+  function nodeVisible(id){
+    var n=M.nodes[id]; if(!n) return true;
+    if(query && (n.label||'').toLowerCase().indexOf(query)<0) return false;
+    if(n.status && hidden[slugStatus(n.status)]) return false;
+    if(focusOn && focusId && id!==focusId && !(nbr[focusId]&&nbr[focusId][id])) return false;
+    return true;
+  }
+  function recompute(){
+    var vis={};
+    Object.keys(M.nodes).forEach(function(id){ vis[id]=nodeVisible(id); });
+    Array.prototype.forEach.call(canvas.querySelectorAll('[data-node-id]'), function(g){ g.classList.toggle('dim', vis[g.getAttribute('data-node-id')]===false); });
+    Array.prototype.forEach.call(canvas.querySelectorAll('[data-edge-id]'), function(g){ var e=M.edges[g.getAttribute('data-edge-id')]; g.classList.toggle('dim', !(e && vis[e.from]!==false && vis[e.to]!==false)); });
+  }
+  var searchBox=document.getElementById('search');
+  searchBox.addEventListener('input', function(){ query=searchBox.value.trim().toLowerCase(); recompute(); });
+  var focusBtn=document.getElementById('focus');
+  focusBtn.addEventListener('click', function(){ focusOn=!focusOn; focusBtn.classList.toggle('on',focusOn); recompute(); });
+  Array.prototype.forEach.call(document.querySelectorAll('#legend .lg'), function(chip){
+    function toggle(){ var s=chip.getAttribute('data-status'); hidden[s]=!hidden[s]; chip.classList.toggle('off',!!hidden[s]); recompute(); }
+    chip.addEventListener('click', toggle);
+    chip.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); } });
+  });
+
+  function head(name, kind, status){
+    var h=el('div','p-head'); h.appendChild(el('h2','p-name',name||'(unnamed)'));
+    if(kind) h.appendChild(el('span','badge',kind));
+    if(status){ var sb=el('span','badge st',status.label); sb.style.color=status.color; sb.style.borderColor=status.color; h.appendChild(sb); }
+    var c=el('button','p-close','\u2715'); c.title='Close (Esc)'; c.onclick=clearSel; h.appendChild(c);
+    return h;
+  }
+  function detailBlocks(d){
+    if(!d) return;
+    if(d.summary) panel.appendChild(el('p','p-summary',d.summary));
+    if(d.fields && d.fields.length){ panel.appendChild(el('div','p-label','Details')); var g=el('div','p-fields'); d.fields.forEach(function(f){ g.appendChild(el('div','k',f.k)); g.appendChild(el('div','v',f.v)); }); panel.appendChild(g); }
+    if(d.tags && d.tags.length){ panel.appendChild(el('div','p-label','Tags')); var t=el('div','p-tags'); d.tags.forEach(function(tag){ t.appendChild(el('span','chip',tag)); }); panel.appendChild(t); }
+    if(d.links && d.links.length){ panel.appendChild(el('div','p-label','Links')); var l=el('div','p-links'); d.links.forEach(function(lk){ var a=el('a','link',lk.label); a.href=lk.href; a.target='_blank'; a.rel='noreferrer'; l.appendChild(a); }); panel.appendChild(l); }
+  }
+  function neighbors(nid){
+    var outs=[], ins=[];
+    for(var k in M.edges){ var e=M.edges[k]; if(e.from===nid) outs.push(e); if(e.to===nid) ins.push(e); }
+    function group(title, list, otherKey){ if(!list.length) return; panel.appendChild(el('div','p-label',title)); var box=el('div','p-neighbors'); list.forEach(function(e){ var other=M.nodes[e[otherKey]]; var b=el('button','neighbor',(e.label?e.label+' \u2192 ':'')+((other&&other.label)||e[otherKey])); b.onclick=function(){ selectById('node', e[otherKey]); }; box.appendChild(b); }); panel.appendChild(box); }
+    group('Leads to', outs, 'to');
+    group('Comes from', ins, 'from');
+  }
+  function renderNode(n){ panel.innerHTML=''; if(!n){ return; } panel.appendChild(head(n.label, n.kind, statusOf(n.status))); if(n.solution){ panel.appendChild(el('div','p-label','Solution')); panel.appendChild(el('p','p-solution',n.solution)); } detailBlocks(n.detail); neighbors(n.id); panel.appendChild(el('div','p-foot','node · '+n.id)); }
+  function renderEdge(e){
+    panel.innerHTML=''; if(!e){ return; }
+    var from=M.nodes[e.from], to=M.nodes[e.to];
+    panel.appendChild(head(e.label||'(transition)', e.kind, null));
+    var g=el('div','p-fields');
+    g.appendChild(el('div','k','from')); var fb=el('div','v'); var fbtn=el('button','neighbor',(from&&from.label)||e.from); fbtn.onclick=function(){ selectById('node',e.from); }; fb.appendChild(fbtn); g.appendChild(fb);
+    g.appendChild(el('div','k','to')); var tb=el('div','v'); var tbtn=el('button','neighbor',(to&&to.label)||e.to); tbtn.onclick=function(){ selectById('node',e.to); }; tb.appendChild(tbtn); g.appendChild(tb);
+    panel.appendChild(el('div','p-label','Endpoints')); panel.appendChild(g);
+    if(e.technology){ panel.appendChild(el('div','p-label','Technology')); panel.appendChild(el('p','p-solution',e.technology)); }
+    detailBlocks(e.detail);
+    panel.appendChild(el('div','p-foot','edge · '+e.id));
+  }
+
+  fit(); stage.focus();
+})();
+</script>
+</body></html>

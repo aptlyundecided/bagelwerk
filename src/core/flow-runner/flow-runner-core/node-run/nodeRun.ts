@@ -124,6 +124,12 @@ export async function runFlowRunnerNode<TInput>(params: RunFlowRunnerNodeParams<
 
   let runResult: NodeGraphRunResult<FlowRunnerNodeExecutionInput<TInput>>;
   if (missing.length > 0) {
+    emitFlowRunnerEvent({ events, onEvent: params.onEvent, log: params.log, event: {
+      type: "execution-state", flowId: target.flowId, sessionId: params.sessionId,
+      scope: "node", qualifiedNodePath: target.qualifiedPath, state: "start_blocked",
+      reason: `Missing required accepted artifacts: ${missing.map(item => `${item.fromQualifiedPath}/${item.relativePath}`).join(", ")}`,
+      nextAction: "Provide or regenerate the required artifacts, then retry this Node.", at: new Date().toISOString(),
+    } });
     runResult = createSyntheticRunResult({
       input: runtimeInput,
       nodeId: target.node.nodeId,
@@ -219,6 +225,7 @@ async function executeNode<TInput>(args: {
   const runner = createNodeRunner({ ...(params.log ? { log: params.log } : {}), emitNodeLines: false });
   const startedAt = new Date().toISOString();
   let nodeResult: NodeResult<unknown>;
+  let originalResult: NodeResult<unknown> | undefined;
   try {
     const rawResult: unknown = await runner.run({ nodeId: target.node.nodeId, label: target.node.name }, () => entry.execute({
       nodeId: target.node.nodeId,
@@ -230,6 +237,7 @@ async function executeNode<TInput>(args: {
     if (!isFlowRunnerNodeResult(rawResult)) throw new Error(`Node ${target.qualifiedPath} returned malformed NodeResult.`);
     nodeResult = rawResult;
   } catch (error) {
+    originalResult = { status: "failed", note: error instanceof Error ? error.message : String(error) };
     const replacements = await runFlowRunnerMiddlewareHook(params.middlewares, "onNodeCrash", { ...middlewareContext, error });
     const replacement = replacements.find((item): item is NodeResult<unknown> => Boolean(item));
     nodeResult = replacement ?? { status: "failed", note: error instanceof Error ? error.message : String(error) };
@@ -242,7 +250,7 @@ async function executeNode<TInput>(args: {
       attemptsByNodeId: { [target.node.nodeId]: 1 },
       lastNodeId: target.node.nodeId,
     },
-    history: [{ nodeId: target.node.nodeId, nodeStatus: nodeResult.status, attemptCount: 1, ...(nodeResult.note ? { note: nodeResult.note } : {}), startedAt, finishedAt: new Date().toISOString() }],
+    history: [{ ...(originalResult ? { originalResult } : {}), nodeId: target.node.nodeId, nodeStatus: nodeResult.status, attemptCount: 1, ...(nodeResult.note ? { note: nodeResult.note } : {}), startedAt, finishedAt: new Date().toISOString() }],
   };
 }
 

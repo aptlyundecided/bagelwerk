@@ -95,3 +95,7 @@ Flow Runner supports lightweight ordered lifecycle middleware around Flow start/
 - Flow Workbench remains a developer-mode/debug surface and should not be required for external/product Flow runs.
 - Preserve core Flow/Node contracts and accepted Node Result semantics.
 - Do not depend on built-ins packages or built-ins CLIs for the external-flow adapter.
+
+## Recovery observations
+
+See [intent contracts](intent-contracts.md) for the endorsed recovery/evidence requirements, source mappings, deterministic tests and known coverage boundaries. Structured `execution-state` events describe actions separately from Node outcomes.

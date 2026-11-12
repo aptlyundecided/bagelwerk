@@ -31,6 +31,7 @@ export async function runSupervisedExternalFlow<TInput = Record<string, unknown>
   const workspace = await validateTargetWorkspace({ targetWorkspace, cwd, policy: policy.workspace });
   if (!workspace.ok) {
     recorder.recordSupervisorMessage("workspace-guard-failed", { issues: workspace.issues });
+    recorder.onEvent({ type: "execution-state", scope: "supervisor", state: "start_blocked", flowId: params.flowId, sessionId: params.sessionId, reason: workspace.issues.map(issue => issue.message).join("; "), nextAction: "Resolve the workspace prerequisites, then start the run again.", at: new Date().toISOString() });
     const metrics = emptyMetrics(params.flowId, params.sessionId);
     const report = await buildAndWriteReport({
       flowId: params.flowId,
@@ -66,6 +67,9 @@ export async function runSupervisedExternalFlow<TInput = Record<string, unknown>
     };
     recoveryAttempts.push(recoveryAttempt);
     recorder.recordSupervisorMessage("supervisor-recovery-attempt", recoveryAttempt);
+    recorder.onEvent({ type: "execution-state", scope: "supervisor", state: "retry_in_progress", flowId: params.flowId, sessionId: params.sessionId, attempt: attemptNumber, maxAttempts,
+      reason: flowError ? (flowError instanceof Error ? flowError.message : String(flowError)) : `Prior Flow attempt ended ${flowResult?.run.runTree.status}.`,
+      nextAction: recoveryAttempt.reason, at: recoveryAttempt.startedAt });
 
     ({ flowResult, flowError } = await runFlowRunnerAttempt({
       params,
@@ -78,6 +82,11 @@ export async function runSupervisedExternalFlow<TInput = Record<string, unknown>
     recoveryAttempt.disposition = shouldAttemptRecovery(flowResult, flowError) ? "failed" : "succeeded";
   }
 
+  if (shouldAttemptRecovery(flowResult, flowError)) recorder.onEvent({
+    type: "execution-state", scope: "supervisor", state: "ended_unresolved", flowId: params.flowId, sessionId: params.sessionId,
+    reason: flowError ? (flowError instanceof Error ? flowError.message : String(flowError)) : `Flow ended ${flowResult?.run.runTree.status}; automatic retry is disabled or its budget is exhausted.`,
+    nextAction: "Inspect the retained run results and choose whether to retry or resume. No further supervisor attempt is scheduled.", at: new Date().toISOString(),
+  });
   const snapshot = recorder.snapshot();
   const metrics = buildFlowSupervisorRunMetrics({
     flowId: params.flowId,

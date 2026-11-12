@@ -173,6 +173,9 @@ export async function runNodeGraph<TInput>(
         runner.emitLine(formatCoreRuntimeLine("node", `enter node=${currentNodeId} visit=${history.length + 1}/${totalWorkingNodes}`));
       }
 
+      if (emitGraphLines && attemptCount > 1 && working.outputsByNodeId[currentNodeId]?.status !== "completed") {
+        runner.emitLine(formatCoreRuntimeLine("node", `Retry in progress: ${currentNodeId} attempt=${attemptCount}; graph routed another attempt`));
+      }
       const startedAt = new Date().toISOString();
       let rawResult: NodeResult<unknown> | undefined;
       let nodeResult: NodeResult<unknown>;
@@ -195,6 +198,8 @@ export async function runNodeGraph<TInput>(
       }
 
       const finishedAt = new Date().toISOString();
+      const originalResult = nodeResult!.status !== "completed" ? { ...nodeResult! } : undefined;
+      let recovery: NodeRunHistoryEntry["recovery"];
 
       if (nodeResult!.status !== "completed" && options.failureResolver) {
         const failurePacket = buildFailurePacket({
@@ -227,14 +232,16 @@ export async function runNodeGraph<TInput>(
             finishedAt,
             failurePacket,
           });
+          recovery = { disposition: resolution.disposition, rationale: resolution.rationale };
           if (resolution.disposition === "doctor_artifacts" || resolution.disposition === "continue_partial") {
             nodeResult = resolution.replacementResult;
             if (emitGraphLines) runner.emitLine(formatCoreRuntimeLine("node", `resolver recovered node=${currentNodeId} disposition=${resolution.disposition} status=${nodeResult.status}`));
           } else {
-            if (emitGraphLines) runner.emitLine(formatCoreRuntimeLine("node", `resolver hard-fail node=${currentNodeId} disposition=${resolution.disposition}`));
+            if (emitGraphLines) runner.emitLine(formatCoreRuntimeLine("node", `resolver decision node=${currentNodeId} disposition=${resolution.disposition}; next action follows graph routing`));
           }
         } catch (resolverError) {
           const resolverMessage = resolverError instanceof Error ? resolverError.message : String(resolverError);
+          recovery = { disposition: "resolver_error", rationale: resolverMessage };
           nodeResult = {
             ...nodeResult!,
             note: [nodeResult!.note, `Failure resolver errored; preserving original result: ${resolverMessage}`].filter(Boolean).join(" "),
@@ -252,6 +259,8 @@ export async function runNodeGraph<TInput>(
         nodeStatus: nodeResult!.status,
         attemptCount,
         nextNodeId,
+        ...(originalResult ? { originalResult } : {}),
+        ...(recovery ? { recovery } : {}),
         ...(nodeResult!.note !== undefined ? { note: nodeResult!.note } : {}),
         startedAt,
         finishedAt,

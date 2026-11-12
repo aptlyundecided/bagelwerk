@@ -59,6 +59,9 @@ export type NodeRunHistoryEntry = {
   nodeStatus: NodeStatus;
   attemptCount: number;
   nextNodeId?: string;
+  /** Original unsuccessful result, before a resolver replaces it. */
+  originalResult?: NodeResult<unknown>;
+  recovery?: { disposition: NodeFailureResolution["disposition"] | "recovered" | "resolver_error"; rationale: string };
   note?: string;
   startedAt: string;
   finishedAt: string;

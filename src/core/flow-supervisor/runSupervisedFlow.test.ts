@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -11,7 +11,7 @@ import { runSupervisedExternalFlow } from "./runSupervisedFlow";
 
 const execFileAsync = promisify(execFile);
 
-async function createSupervisedExternalFlowWorkspace(): Promise<string> {
+async function createSupervisedExternalFlowWorkspace(failures = 0): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), "flow-supervisor-smoke-"));
   await execFileAsync("git", ["init"], { cwd: root });
   await execFileAsync("git", ["checkout", "-b", "feature/flow-supervisor-smoke"], { cwd: root });
@@ -23,7 +23,7 @@ async function createSupervisedExternalFlowWorkspace(): Promise<string> {
     }, null, 2)}\n`,
     "utf8",
   );
-  await writeFile(path.join(root, "supervisedSmokeFlow.mjs"), flowModuleSource(), "utf8");
+  await writeFile(path.join(root, "supervisedSmokeFlow.mjs"), flowModuleSource(failures), "utf8");
   return root;
 }
 
@@ -50,7 +50,7 @@ test("runSupervisedExternalFlow runs a deterministic external flow and writes su
   assert.match(await readFile(result.supervisor.artifacts.metricsPath, "utf8"), /"completedNodeCount": 1/);
 });
 
-function flowModuleSource(): string {
+function flowModuleSource(failures = 0): string {
   return `import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -71,10 +71,13 @@ const configuredNode = {
   params: {},
 };
 
+let attempts = 0;
 const nodeTypeEntry = {
   nodeType: "supervised-smoke.write",
   validateParams: (value) => value ?? {},
   execute: async ({ working }) => {
+    attempts += 1;
+    if (attempts <= ${failures}) return { status: "failed", note: "fixture unavailable", payload: { attempt: attempts } };
     const artifact = await writeJsonArtifact(working.input.runtime.record.runDir, "supervised-smoke.json", { ok: true });
     return { status: "completed", note: "done", payload: { artifactFiles: [artifact] } };
   },
@@ -102,3 +105,38 @@ export default {
 };
 `;
 }
+
+
+for (const [mode, failures, maxAttempts, retries] of [
+  ["observe-only", 3, 3, 0], ["resume-once", 1, 2, 1], ["bounded-retry", 5, 2, 1],
+] as const) {
+  test(`${mode} reports actual retries and final exhaustion in its retained ledger`, async t => {
+    const root = await createSupervisedExternalFlowWorkspace(failures);
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const [flow] = await listExternalFlows(root);
+    const result = await runSupervisedExternalFlow({ cwd: root, targetWorkspace: root, flowId: flow.id, sessionId: "retry", input: {}, supervisorPolicy: { workspace: { allowDirtyWorktree: true }, recovery: { mode, maxSupervisorAttempts: maxAttempts } } });
+    const raw = await readFile(result.supervisor.artifacts.ledgerPath, "utf8");
+    const entries = raw.trim().split("\n").map(line => JSON.parse(line));
+    const states = entries.map(entry => entry.event).filter(event => event?.type === "execution-state" && event.scope === "supervisor");
+    const retryEvents = states.filter(event => event.state === "retry_in_progress");
+    assert.equal(retryEvents.length, retries);
+    if (retries) {
+      assert.equal(retryEvents[0].attempt, 2);
+      assert.equal(retryEvents[0].maxAttempts, maxAttempts);
+      assert.match(retryEvents[0].reason, /failed/);
+    }
+    const success = failures === 1;
+    assert.equal(states.some(event => event.state === "ended_unresolved"), !success);
+    assert.equal(result.flowResult?.run.runTree.status, success ? "completed" : "failed");
+  });
+}
+
+test("workspace guard records a blocked start without a Flow attempt", async t => {
+  const root = await createSupervisedExternalFlowWorkspace();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const [flow] = await listExternalFlows(root);
+  const result = await runSupervisedExternalFlow({ cwd: root, targetWorkspace: root, flowId: flow.id, sessionId: "blocked", input: {} });
+  assert.equal(result.flowResult, undefined);
+  assert.equal(result.supervisor.status, "aborted");
+  assert.match(await readFile(result.supervisor.artifacts.ledgerPath, "utf8"), /start_blocked/);
+});

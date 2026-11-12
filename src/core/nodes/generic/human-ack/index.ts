@@ -274,6 +274,16 @@ export async function runHumanAckNode(args: {
     });
   }
 
+  if (isRecord(args.input) && isRecord(args.input.runtime)) {
+    const runtime = args.input.runtime;
+    const snapshot = runtime.launchSnapshot;
+    if (typeof runtime.emitEvent === "function" && isRecord(snapshot)) runtime.emitEvent({
+      type: "execution-state", scope: "node", state: "waiting_for_input",
+      flowId: snapshot.flowId, sessionId: runtime.sessionId, qualifiedNodePath: snapshot.qualifiedNodePath,
+      reason: `Human response needed: ${args.params.prompt}`,
+      nextAction: "Provide the acknowledgement to finish this Node and allow configured downstream work to continue.", at: new Date().toISOString(),
+    });
+  }
   const answer = await effectiveInteraction.ask({
     prompt: renderAskPrompt(args.params),
     contextNote: "Press Enter to record a durable acknowledgement artifact for downstream Nodes. This gate never auto-acknowledges.",

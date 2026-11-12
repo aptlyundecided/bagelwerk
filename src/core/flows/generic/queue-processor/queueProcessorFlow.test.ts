@@ -255,3 +255,34 @@ test("runQueueProcessorFlow enforces queue concurrency while queued work items r
   assert.ok(elapsedMs >= 2_300, `Expected queue concurrency=2 to take about five 500ms waves; elapsed ${elapsedMs}ms was too fast.`);
   assert.ok(elapsedMs < 3_800, `Expected each queued work item's internal branches to run in parallel; elapsed ${elapsedMs}ms was too slow.`);
 });
+
+
+for (const branchStatus of ["failed", "timed_out", "completed"] as const) {
+  test(`parallel ${branchStatus} branch stays inspectable and continuation is reported honestly`, async () => {
+    const base = { createdAt: "2026-11-12", updatedAt: "2026-11-12" };
+    const executed: string[] = [];
+    const nodeRegistry = createStaticNodeRegistry([{ nodeType: "fixture", validateParams: (value: any) => value, execute: async ({ nodeId, params }: any) => {
+      executed.push(nodeId);
+      return { status: params.status, note: nodeId === "branch" ? "source observation" : "ok", payload: { source: nodeId } };
+    } }]);
+    const nodeLibrary = createStaticFlowNodeLibrary(["start", "branch", "join"].map(nodeId => ({ ...base, nodeId, nodeType: "fixture", name: nodeId, description: nodeId, params: { status: nodeId === "branch" ? branchStatus : "completed" } })));
+    const flow = { ...base, flowId: "probe", name: "probe", initial: "start", nodes: { start: { nodeId: "start" }, join: { nodeId: "join" } }, flows: { lane: { ...base, flowId: "lane", name: "lane", initial: "branch", nodes: { branch: { nodeId: "branch" } }, edges: [] } }, edges: [{ from: "start", to: "lane", on: "completed" }, { from: "lane", to: "join", on: "completed" }] };
+    const item = { item: 1, flow, parallelGroups: [{ after: "probe.start", branches: ["probe.lane"], join: "probe.join" }] as [{ after: string; branches: string[]; join: string }] };
+    const progress: any[] = [];
+    const result = await runQueueProcessorFlow(createNodeRunner({ log: () => undefined }), {
+      queueId: "intent-check", workItems: [{ ...item, id: "first" }, { ...item, id: "second" }], nodeRegistry, nodeLibrary, input: undefined, concurrency: 1, stopOnFirstFailure: true, onProgress: event => progress.push(event),
+    });
+    const partial = branchStatus !== "completed";
+    assert.equal(result.status, partial ? "partial" : "completed");
+    assert.equal(result.partial, partial ? 2 : 0);
+    assert.equal(result.completed, partial ? 0 : 2);
+    assert.equal(result.failed, 0);
+    assert.equal(executed.filter(id => id === "join").length, 2);
+    const first: any = result.results[0].result;
+    assert.equal(first.working.outputsByNodeId["probe.lane.branch"].status, branchStatus);
+    assert.deepEqual(first.working.outputsByNodeId["probe.lane.branch"].payload, { source: "branch" });
+    assert.equal(first.parallelGroups[0].continuation.decision, partial ? "continue_partial" : "continue");
+    assert.equal(progress.at(-1).partial, result.partial);
+    assert.equal(result.results[1].status, partial ? "partial" : "completed");
+  });
+}

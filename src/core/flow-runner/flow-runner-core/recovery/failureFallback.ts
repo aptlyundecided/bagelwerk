@@ -42,6 +42,7 @@ export async function resolveUnhandledFailureIfNeeded<TInput>(args: {
   });
 
   const nodeRun = args.nodeRun;
+  const originalResult = { ...nodeRun.runResult.working.outputsByNodeId[args.treeNode.nodeId]! };
   const resolution = await args.params.unhandledFailureResolver({ run: nodeRun, treeNode: args.treeNode });
   if (resolution?.replacementResult) {
     if (!isFlowRunnerNodeResult(resolution.replacementResult)) throw new Error(`Unhandled failure resolver returned malformed replacement NodeResult for '${args.current}'.`);
@@ -49,6 +50,11 @@ export async function resolveUnhandledFailureIfNeeded<TInput>(args: {
       await observeRepairedArtifact({ ...args, nodeRun, artifact });
     }
     nodeRun.artifactExistence = artifactExistenceFromExpected(nodeRun.launchSnapshot.expectedArtifacts, nodeRun.artifactEvents);
+    const historyEntry = nodeRun.runResult.history[nodeRun.runResult.history.length - 1];
+    if (historyEntry) {
+      historyEntry.originalResult ??= originalResult;
+      historyEntry.recovery = { disposition: resolution.disposition, rationale: resolution.note ?? "Flow Runner fallback supplied a replacement result." };
+    }
     nodeRun.runResult.working.outputsByNodeId[args.treeNode.nodeId] = resolution.replacementResult;
     args.treeNode.status = resolution.replacementResult.status;
     if (resolution.replacementResult.note) args.treeNode.note = resolution.replacementResult.note;

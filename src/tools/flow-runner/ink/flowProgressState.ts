@@ -1,4 +1,4 @@
-import type { FlowRunnerEvent, FlowRunnerNodeProgress } from "../../../core/flow-runner/events";
+import { flowRunnerEventLine, type FlowRunnerEvent, type FlowRunnerNodeProgress } from "../../../core/flow-runner/events";
 import type { FlowRunnerExecutionPlan } from "../../../core/flow-runner";
 import type { FlowProgressGraphInit } from "./flowProgressGraph";
 import type { FlowRunnerNodeStatus } from "../../../core/flow-runner/runRecords";
@@ -314,6 +314,7 @@ function appendOnce(values: string[], value: string): string[] {
 }
 
 function recentEventFor(event: FlowProgressEvent): FlowProgressRecentEvent {
+  if (event.type === "execution-state") return { at: event.at, type: event.type, label: flowRunnerEventLine(event), severity: event.state === "ended_unresolved" || event.state === "start_blocked" ? "error" : "info" };
   if (event.type === "flow-start") return { at: event.at, type: event.type, label: `Flow start ${event.flowId}`, severity: "info" };
   if (event.type === "flow-complete") return { at: event.at, type: event.type, label: `Flow complete ${event.flowId} status=${event.status}`, severity: event.status === "completed" ? "success" : "error" };
   if (event.type === "node-start") return { at: event.at, type: event.type, label: `Node start ${event.qualifiedNodePath}`, severity: "info" };

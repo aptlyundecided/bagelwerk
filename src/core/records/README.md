@@ -125,6 +125,8 @@ Known credential shapes (`sk-…`, `sk-ant-…`, `ghp_…`, `xox…-`, `AKIA…`
 | `records.test.ts` | Mirror, authority/heal/parity, ingest, run-dir reuse |
 | `records.security.test.ts` | Read-only SQL guard, redaction, data-dir lock |
 | `records.concurrency.test.ts` | Server with many clients, search + MCP, flush under load, auto-mode owner/serve |
+| `records.waiting.test.ts` | Ten separate Node callers wait behind an occupied database, stay responsive, and complete without transaction interleaving |
+| `records-request-worker.ts` | Child-process fixture for the waiting test; no agent harness |
 
 ## Moving to Postgres later
 
@@ -133,3 +135,15 @@ Known credential shapes (`sk-…`, `sk-ant-…`, `ghp_…`, `xox…-`, `AKIA…`
 3. Move data: `records ingest` from the run-record files (simplest), or `pg_dump` from PGlite via `@electric-sql/pglite-tools` and restore.
 4. Set `BAGELWERK_RECORDS=postgres://…` for every process; stop `records serve`.
 5. Later if needed: a read-only role for agent tools, HNSW indexes on fixed-dimension embeddings, monthly partitions for `agent_run_events` / `flow_events`, `LISTEN/NOTIFY` for live timelines.
+
+### Verifying request waiting
+
+Run `BAGELWERK_RECORDS=off node --import tsx --test src/core/records/records.waiting.test.ts` (also included by `npm run test:records`). The test holds a real PGlite transaction open, sends transactions through the records HTTP server from ten separate Node processes, verifies all ten arrived and remain pending while their processes still respond to IPC, then releases the database and checks all twenty writes and transaction adjacency. It uses an isolated in-memory store and temporary server advert, with no models or agent harnesses. It verifies waiting behind an established owner, not startup ownership races, crash recovery, durable queueing or timeout/cancellation semantics. The HTTP client waits asynchronously; it does not suspend the calling process.
+
+For a larger waiting probe, set `BAGELWERK_RECORDS_TEST_CALLERS=50` on that command. It defaults to 10 and accepts integers from 1 to 100, keeping normal test runs small. This varies separate Node caller processes, not PGlite instances; all callers share one established owner.
+
+### Opt-in disk read comparison
+
+Run `BAGELWERK_RECORDS=off node --import tsx src/core/records/records-storage.benchmark.ts`. It creates a fresh `.artifacts/benchmarks/records-storage-*` directory, retains a synthetic disk database and JSON settings/results, and never opens the configured records directory. Separate processes measure memory, freshly populated disk, and reopened disk modes using the same 25,600 indexed 4KiB payloads (100 MiB payload; table/index overhead measured separately). Each uses Bagelwerk's PGlite/HTTP adapters, validates results, and measures 200 individual reads, ten bursts of 50 requests, and full payload scans. The benchmark is opt-in, not a default test.
+
+Point/burst reads follow a full scan and are warm-cache measurements. Reopening clears PGlite's process state, not the OS filesystem cache. Full scans include computing an MD5 per payload. Fifty concurrent HTTP requests originate in one process in this benchmark; the separate waiting test covers separate caller processes. JSON includes timings and RSS observations, but there is no realistic records schema/search load, baseline-subtracted memory measurement, capacity limit, cleanup threshold, or cold-device guarantee. Keep or explicitly remove the generated directory once its database is no longer needed; results are not automatically deleted.

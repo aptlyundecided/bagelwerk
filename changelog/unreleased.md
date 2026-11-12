@@ -12,3 +12,9 @@
 - Modernized the `handoff-risk-review` skill and mirrored surfaces so its procedure and pattern library describe Flow/Node handoffs instead of retired Job/Step/Cell/Trace/flow-runtime concepts.
 - Modernized the paused `artifacts-purge` skill warning across mirrored surfaces so its operator gate describes Flow/Node artifact preservation needs without retired circuit/flow-runtime language.
 - Swept remaining repo-local skill surfaces and synced mirrors so skill instructions avoid retired architecture vocabulary unless it is outside the skill surface.
+
+### Recovery reporting and evidence
+
+- Retain unsuccessful Node results when recovery replaces them.
+- Report actual retry, input wait, partial continuation, blocked-start and unresolved-end observations without introducing new failure categories.
+- Flow queue results/progress now expose `partial` status/counts; existing tolerated partial continuation still runs.

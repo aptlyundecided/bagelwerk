@@ -283,12 +283,13 @@ export class RecordStore {
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb) ON CONFLICT (dedupe_key) DO NOTHING`,
         params: [dedupeKey, ownerRunDir, ord, sessionId, typeof event.flowId === "string" ? event.flowId : null, nodePath ?? null, type, at, pgJson(event)],
       });
+      // Wait/start-blocked observations originate in Node records; retry/continuation observations may exist only in the Flow record.
       // Flow-level event lists repeat their Nodes' events; those are indexed under the Node run already.
-      const forwardedNodeEvent = /[\\/]__flow__[\\/]/.test(ownerRunDir) && (type.startsWith("node-") || type === "artifact-observed" || type === "accepted" || type === "child-event");
+      const forwardedNodeEvent = /[\\/]__flow__[\\/]/.test(ownerRunDir) && (type.startsWith("node-") || type === "artifact-observed" || type === "accepted" || type === "child-event" || (type === "execution-state" && event.scope === "node" && (event.state === "waiting_for_input" || event.state === "start_blocked")));
       if (forwardedNodeEvent) continue;
       // Index the events that carry meaning beyond structure: failures, notes, progress messages.
       const progress = event.progress as { message?: string; reason?: string } | undefined;
-      const text = [event.note, event.disposition, progress?.message, progress?.reason, type.includes("failure") || event.status === "failed" ? `${type} ${event.status ?? ""}` : undefined]
+      const text = [event.note, event.disposition, ...(type === "execution-state" ? [event.state, event.reason, event.nextAction] : []), progress?.message, progress?.reason, type.includes("failure") || event.status === "failed" ? `${type} ${event.status ?? ""}` : undefined]
         .filter((value) => typeof value === "string" && value.trim()) as string[];
       if (text.length > 0) {
         statements.push(...searchDocStatements({

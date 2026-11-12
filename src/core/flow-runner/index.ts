@@ -24,6 +24,7 @@ export {
 export {
   flowRunnerEventLine,
   type FlowRunnerEvent,
+  type ExecutionState,
   type FlowRunnerEventBase,
   type FlowRunnerEventSink,
   type FlowRunnerNodeProgress,

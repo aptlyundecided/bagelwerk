@@ -21,7 +21,10 @@ export type FlowRunnerNodeProgress = {
   message?: string;
 };
 
+export type ExecutionState = "retry_in_progress" | "waiting_for_input" | "continuing_partial" | "ended_unresolved" | "start_blocked";
+
 export type FlowRunnerEvent = FlowRunnerEventBase & (
+  | { type: "execution-state"; flowId: string; sessionId: string; scope: "node" | "flow" | "supervisor"; qualifiedNodePath?: string; state: ExecutionState; reason: string; nextAction: string; attempt?: number; maxAttempts?: number }
   | { type: "flow-start"; flowId: string; sessionId: string; mode: "whole-flow" | "prefix" | "lanes"; runDir: string }
   | { type: "flow-complete"; flowId: string; sessionId: string; status: FlowRunnerNodeStatus; runDir: string; latestDir: string }
   | { type: "node-start"; flowId: string; sessionId: string; qualifiedNodePath: string; nodeId: string; label: string; runDir: string }
@@ -43,6 +46,10 @@ export type FlowRunnerEventSink = (event: FlowRunnerEvent) => void;
 
 export function flowRunnerEventLine(event: FlowRunnerEvent): string {
   switch (event.type) {
+    case "execution-state": {
+      const labels: Record<ExecutionState, string> = { retry_in_progress: "Retry in progress", waiting_for_input: "Waiting for input", continuing_partial: "Continuing with partial results", ended_unresolved: "Run ended — unresolved", start_blocked: "Start blocked" };
+      return `${labels[event.state]}: ${event.qualifiedNodePath ?? event.flowId} (${event.scope}) — ${event.reason}${event.attempt !== undefined ? ` Attempt ${event.attempt}${event.maxAttempts !== undefined ? ` of ${event.maxAttempts}` : ""}.` : ""} ${event.nextAction}`;
+    }
     case "flow-start":
       return `⬢ FLOW start ${event.flowId} mode=${event.mode}`;
     case "flow-complete":

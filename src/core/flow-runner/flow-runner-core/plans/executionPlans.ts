@@ -96,6 +96,11 @@ export async function runResolvedFlowRunnerFlow<TInput>(params: RunResolvedFlowR
           at: new Date().toISOString(),
         });
       }
+      if (nextVisit > 1 && [...localNodes].reverse().find(node => node.qualifiedNodePath === current)?.status !== "completed") forwardEvent({
+        type: "execution-state", scope: "node", state: "retry_in_progress", flowId: params.resolvedFlow.resolved.rootFlowId, sessionId: params.sessionId,
+        qualifiedNodePath: current, attempt: nextVisit, ...(maxVisitsPerNode !== undefined ? { maxAttempts: maxVisitsPerNode } : {}),
+        reason: "Configured graph routed back to this Node for another visit.", nextAction: "Execute this visit under the configured iteration limits.", at: new Date().toISOString(),
+      });
       const priorRunCount = nodeRuns.length;
       const treeNode = await runAndRecord(current);
       const nodeRun = nodeRuns.length > priorRunCount ? nodeRuns[nodeRuns.length - 1] : undefined;
@@ -117,6 +122,11 @@ export async function runResolvedFlowRunnerFlow<TInput>(params: RunResolvedFlowR
         allowedNodePaths: options.allowedNodePaths,
         events,
         forwardEvent,
+      });
+      if (next && treeNode.status !== "completed") forwardEvent({
+        type: "execution-state", scope: "node", state: "continuing_partial", flowId: params.resolvedFlow.resolved.rootFlowId, sessionId: params.sessionId,
+        qualifiedNodePath: current, reason: `Configured transition permits continuing after ${treeNode.status}: ${treeNode.note ?? "no reason supplied"}`,
+        nextAction: `Continue to ${next}; retain this Node's unsuccessful result.`, at: new Date().toISOString(),
       });
       forwardEvent({ type: "transition", flowId: params.resolvedFlow.resolved.rootFlowId, sessionId: params.sessionId, fromQualifiedNodePath: current, ...(next ? { toQualifiedNodePath: next } : {}), status: treeNode.status, at: new Date().toISOString() });
       await runFlowRunnerMiddlewareHook(params.middlewares, "afterTransition", {
@@ -193,6 +203,12 @@ export async function runResolvedFlowRunnerFlow<TInput>(params: RunResolvedFlowR
     nodes: treeNodes,
     lanes,
   };
+  if (failedNode) forwardEvent({
+    type: "execution-state", scope: "flow", state: "ended_unresolved",
+    flowId: params.resolvedFlow.resolved.rootFlowId, sessionId: params.sessionId,
+    reason: `This Flow attempt ended with non-completed Nodes: ${treeNodes.filter(node => node.status !== "completed").map(node => node.qualifiedNodePath).join(", ")}`,
+    nextAction: "Inspect retained Node results. A supervising caller may retry; this Flow attempt has ended.", at: finishedAt,
+  });
   forwardEvent({ type: "flow-complete", flowId: params.resolvedFlow.resolved.rootFlowId, sessionId: params.sessionId, status: runTree.status, runDir: record.runDir, latestDir: record.latestDir, at: finishedAt });
   await runFlowRunnerMiddlewareHook(params.middlewares, "afterFlow", {
     flowId: params.resolvedFlow.resolved.rootFlowId,

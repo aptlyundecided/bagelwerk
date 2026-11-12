@@ -325,3 +325,21 @@ test("unaccept withdraws the nodeId alias too and is not healed back from kept f
     await store.close();
   }
 });
+
+
+test("execution observations are retained and searchable without duplicate forwarded node hits", async t => {
+  const store = await memoryStore();
+  t.after(() => store.close());
+  const event = { type: "execution-state", scope: "node", state: "waiting_for_input", flowId: "intent", sessionId: "s", qualifiedNodePath: "intent.review", reason: "Need commander acknowledgement", nextAction: "Approve the proposed changes to continue", at: new Date().toISOString() };
+  await store.apply(store.flowEventStatements([
+    { ownerRunDir: "/runs/review/run-1", ord: 1, event },
+    { ownerRunDir: "/runs/__flow__/intent/run-1", ord: 1, event },
+  ]));
+  const hits = await store.search({ query: "commander acknowledgement", kinds: ["flow_event"] });
+  assert.equal(hits.length, 1);
+  assert.equal(await count(store, "flow_events"), 2);
+  const [row] = await store.executor.query<{ payload: typeof event }>("SELECT payload FROM flow_events WHERE owner_run_dir=$1", ["/runs/review/run-1"]);
+  assert.deepEqual(row.payload, event);
+  await store.apply(store.flowEventStatements([{ ownerRunDir: "/runs/__flow__/intent/run-1", ord: 2, event: { ...event, state: "continuing_partial", reason: "Proceed with available source evidence" } }]));
+  assert.equal((await store.search({ query: "available source evidence", kinds: ["flow_event"] })).length, 1);
+});

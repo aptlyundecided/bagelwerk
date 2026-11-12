@@ -27,6 +27,7 @@ export type ParallelConfiguredFlowRunResult<TInput = unknown> = NodeGraphRunResu
     after: string;
     join: string;
     branches: ParallelFlowBranchRun<TInput>[];
+    continuation: { decision: "continue" | "continue_partial"; reason: string; unsuccessfulNodePaths: string[] };
   }>;
 };
 
@@ -151,6 +152,18 @@ export async function runConfiguredFlowWithParallelFlows<TInput>(
   }));
 
   const mergedWorking = mergeWorkingContexts(input, prefixResult.working, branchRuns.map((branch) => branch.result));
+  const unsuccessfulNodePaths = Object.entries(mergedWorking.outputsByNodeId)
+    .filter(([, result]) => result.status !== "completed").map(([nodePath]) => nodePath);
+  const continuation = {
+    decision: unsuccessfulNodePaths.length ? "continue_partial" as const : "continue" as const,
+    reason: unsuccessfulNodePaths.length
+      ? "Partial continuation is allowed; unsuccessful branch results remain available to the join."
+      : "All recorded branch results completed.",
+    unsuccessfulNodePaths,
+  };
+  if (unsuccessfulNodePaths.length && options.emitGraphLines !== false) {
+    runner.emitLine(`Continuing with partial results: ${unsuccessfulNodePaths.join(", ")}. ${continuation.reason}`);
+  }
   const joinSpec = cloneRunnerSpecWithInitial(compiled.runnerSpec, group.join, []);
   const joinResult = await runNodeGraph(runner, joinSpec, input, {
     ...options,
@@ -168,6 +181,7 @@ export async function runConfiguredFlowWithParallelFlows<TInput>(
       after: group.after,
       join: group.join,
       branches: branchRuns,
+      continuation,
     }],
   };
 }

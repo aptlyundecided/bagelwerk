@@ -76,3 +76,7 @@ The CLI prints compact JSON with the supervisor status and report paths. Use `--
 ## Validation
 
 Use deterministic tests only. Do not require live model/provider runs for this package.
+
+## Recovery action reporting
+
+Supervisor ledger events distinguish actual retries (with attempt, limit and reason), blocked starts, and ended unresolved runs. A Flow attempt ending does not imply that its supervisor is finished retrying. See [intent contracts](../flow-runner/intent-contracts.md).

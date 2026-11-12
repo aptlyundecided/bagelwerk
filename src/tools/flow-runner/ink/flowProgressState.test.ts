@@ -78,3 +78,11 @@ test("Flow progress store supports replay, unsubscribe, and close", () => {
   assert.equal(snapshot.state.closed, true);
   assert.equal(snapshot.events.length, 2);
 });
+
+
+test("execution observations are readable without replacing Node outcome status", () => {
+  const initial = createInitialFlowProgressSnapshot({ title: "Demo" });
+  const state = reduceFlowProgressEvent(initial, { type: "execution-state", flowId: "demo", sessionId: "s1", scope: "supervisor", state: "retry_in_progress", reason: "Invalid output", nextAction: "Run again", attempt: 2, maxAttempts: 3, at });
+  assert.equal(state.status, initial.status);
+  assert.ok(state.recent.some(event => event.label.includes("Retry in progress") && event.label.includes("Attempt 2 of 3")));
+});

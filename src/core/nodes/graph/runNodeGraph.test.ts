@@ -79,3 +79,26 @@ test("runNodeGraph preserves the original failed status when the resolver throws
   assert.match(result.working.outputsByNodeId["node.alpha"]?.note ?? "", /original failure/);
   assert.match(result.working.outputsByNodeId["node.alpha"]?.note ?? "", /resolver bug/);
 });
+
+
+test("recovery retains the unsuccessful result and reason without blocking partial continuation", async () => {
+  const spec = singleNodeSpec();
+  spec.handlers["node.alpha"] = async () => ({ status: "failed", note: "one source unavailable", payload: { available: ["A", "B"] } });
+  const result = await runNodeGraph(createNodeRunner({ log: () => undefined }), spec, { value: "seed" }, {
+    failureResolver: { resolveFailure: async () => ({ disposition: "continue_partial", replacementResult: { status: "completed", payload: { available: ["A", "B"] } }, rationale: "Two sources are enough for this comparison" }) },
+  });
+  assert.equal(result.finalNodeId, "success");
+  assert.deepEqual(result.history[0].originalResult, { status: "failed", note: "one source unavailable", payload: { available: ["A", "B"] } });
+  assert.deepEqual(result.history[0].recovery, { disposition: "continue_partial", rationale: "Two sources are enough for this comparison" });
+});
+
+test("retry_node is retained as a request, not reported as an executed retry or hard failure", async () => {
+  const lines: string[] = [];
+  const result = await runNodeGraph(createNodeRunner({ log: line => lines.push(line) }), singleNodeSpec(), { value: "seed" }, {
+    failureResolver: { resolveFailure: async () => ({ disposition: "retry_node", retryInstructions: "Try again", rationale: "Temporary issue" }) },
+  });
+  assert.equal(result.history.length, 1);
+  assert.equal(result.history[0].recovery?.disposition, "retry_node");
+  assert.equal(result.finalNodeId, "failure");
+  assert.ok(lines.every(line => !line.includes("Retry in progress") && !line.includes("resolver hard-fail")));
+});
