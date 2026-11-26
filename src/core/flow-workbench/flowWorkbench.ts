@@ -107,6 +107,7 @@ export type FlowWorkbenchRunTreeBranch = {
 
 export type FlowWorkbenchRunTree = {
   schemaVersion: 1;
+  rubric?: import("../rubric").Rubric;
   flowId: string;
   sessionId: string;
   mode: "sequential" | "parallel-groups";
@@ -238,6 +239,7 @@ export async function preflightWorkbenchRun<TInput>(params: FlowWorkbenchRunPara
     nodeType: target.node.nodeType,
     nodeName: target.node.name,
     nodeDescription: target.node.description,
+    ...(target.node.rubric && { rubric: target.node.rubric }),
     flowPath: target.flowPath,
     params: target.node.params,
     ...(target.executionPolicy ? { executionPolicy: target.executionPolicy } : {}),
@@ -619,6 +621,7 @@ export async function runFlowWorkbenchFlow<TInput>(params: Omit<FlowWorkbenchRun
   const failedNode = treeNodes.find((node) => node.status === "failed" || node.status === "timed_out" || node.status === "unknown");
   const runTree: FlowWorkbenchRunTree = {
     schemaVersion: 1,
+    ...(compiled.resolved.rootRubric && { rubric: compiled.resolved.rootRubric }),
     flowId: compiled.resolved.rootFlowId,
     sessionId: params.sessionId,
     mode,

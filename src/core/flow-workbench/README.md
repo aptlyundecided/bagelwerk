@@ -29,8 +29,14 @@ Supported first-pass modes:
 
 `acceptFlowWorkbenchRunTree(...)` bulk-accepts all Node runs in a run tree. Artifacts remain Node-scoped; Flow run-tree records are inspection/coordination metadata, not Flow-owned contracts.
 
+## Grade saved text output on demand
+
+Configured Flows and Nodes may each declare `rubric: { criteria: ['...'] }`. Workbench records the root Flow rubric in its run tree and the configured Node rubric in its launch snapshot. `gradeFlowWorkbenchOutput(selection, evaluate)` reads the saved artifact copy. Use `kind: 'node'`, a Node `runDir` and emitted `relativePath`; for `kind: 'flow'`, use the Flow `runDir` and add the producing `qualifiedNodePath`. Use a numbered run directory to select a specific run.
+
+The supplied evaluator takes `(criterion, outputText)` and returns `{ verdict: 'pass' | 'partial' | 'fail', reason }`, synchronously or asynchronously. The action returns each criterion with its judgment, or `status: 'no-rubric'` for an ungraded run (including older runs). It never reruns the producer or changes acceptance. See `savedRubric.test.ts` for a deterministic example at both levels.
+
 ## Non-goals
 
 - separate runtime tier
 - second graph engine
-- content validation of artifacts in v1
+- automatic content grading during execution or acceptance

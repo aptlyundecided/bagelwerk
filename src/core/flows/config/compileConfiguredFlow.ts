@@ -402,6 +402,7 @@ export function compileConfiguredFlowSpec<TInput>(params: {
 
   const resolved: ResolvedFlowGraph = {
     rootFlowId: flow.flowId,
+    ...(flow.rubric && { rootRubric: flow.rubric }),
     rootFlowPath: [flow.flowId],
     initialNodePath,
     nodesByPath: state.nodesByPath,

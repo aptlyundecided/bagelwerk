@@ -13,6 +13,7 @@ export type FlowWorkbenchAcceptanceActorKind = "user" | "agent";
 
 export type FlowWorkbenchLaunchSnapshot = {
   flowId: string;
+  rubric?: import("../rubric").Rubric;
   qualifiedNodePath: string;
   nodeId: string;
   nodeType: string;
