@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RubricSchema, type Rubric } from "../../rubric";
 
 import { ExecutionPolicySchema, type ExecutionPolicy } from "./executionPolicy";
 
@@ -55,6 +56,7 @@ export type ConfiguredFlowSpec = {
   flows?: Record<string, ConfiguredFlowSpec>;
   edges?: ConfiguredFlowEdge[];
   executionPolicy?: ExecutionPolicy;
+  rubric?: Rubric;
 };
 
 export const ConfiguredFlowSpecSchema: z.ZodType<ConfiguredFlowSpec> = z.lazy(() =>
@@ -70,6 +72,7 @@ export const ConfiguredFlowSpecSchema: z.ZodType<ConfiguredFlowSpec> = z.lazy(()
       flows: z.record(ConfiguredFlowSpecSchema).default({}),
       edges: z.array(FlowEdgeSchema).default([]),
       executionPolicy: ExecutionPolicySchema.optional(),
+      rubric: RubricSchema.optional(),
     })
     .superRefine((value, ctx) => {
       const localRefs = new Set<string>([

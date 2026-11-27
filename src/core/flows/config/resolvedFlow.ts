@@ -32,6 +32,7 @@ export type ResolvedFlowBoundary = {
 
 export type ResolvedFlowGraph = {
   rootFlowId: string;
+  rootRubric?: import("../../rubric").Rubric;
   rootFlowPath: string[];
   initialNodePath: string;
   nodesByPath: Record<string, ResolvedFlowNode>;

@@ -1,6 +1,6 @@
 {
   "name": "bagelwerk",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "Agent workflow engine for developers.",
   "main": "dist/index.js",

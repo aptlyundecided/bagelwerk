@@ -24,14 +24,14 @@ Infer the requested mode from the user:
 2. **Version bump only** — increment package metadata; do not cut release notes unless requested.
 3. **Release prep** — bump version, create release notes, and reset `changelog/unreleased.md`.
 
-If the mode or bump type is ambiguous, ask before editing.
+For a PR into `main`, follow the per-PR policy in `changelog/about.md`: bump once from current `main` and write dated notes for that PR. Leave unrelated unreleased entries in place. For standalone release prep, follow the release prep flow below.
 
 ## Bump rules
 
 Use SemVer language unless the operator gives an exact version:
 
-- `patch` — fixes or polish that do not add a capability.
-- `minor` — new user-visible capability, command, workflow, or supported surface.
+- `patch` — default for each PR, including new capabilities.
+- `minor` — only when explicitly agreed; do not infer it from feature scope.
 - `major` — intentional breaking change for users/operators.
 - exact version — use exactly what the operator gives.
 

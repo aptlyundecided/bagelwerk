@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RubricSchema } from "../../rubric";
 
 export const ConfiguredNodeSpecSchema = z.object({
   nodeId: z.string().trim().min(1, "Configured node nodeId must not be empty."),
@@ -8,6 +9,7 @@ export const ConfiguredNodeSpecSchema = z.object({
   createdAt: z.string().trim().min(1, "Configured node createdAt must not be empty."),
   updatedAt: z.string().trim().min(1, "Configured node updatedAt must not be empty."),
   params: z.unknown(),
+  rubric: RubricSchema.optional(),
   tags: z.array(z.string().trim().min(1)).optional(),
   status: z.enum(["draft", "active", "deprecated"]).optional(),
 });
