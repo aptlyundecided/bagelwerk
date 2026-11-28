@@ -214,3 +214,28 @@ test("a sink that throws never stops the run", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("with outputSchema the final message is returned parsed, and an unreadable one is a contract failure", async () => {
+  const dir = await tempDir("bw-codex-structured-");
+  try {
+    const good = await fakeCodex(dir, { events: SAMPLE_EVENTS, lastMessage: '{"outcome":"ready_for_review"}\n' });
+    const result = await executeCodexAgentNodeSession(
+      { cwd: dir, prompt: "p", outputSchema: { type: "object" } },
+      { env: { ...process.env, CODEX_PATH: good }, observationRoot: path.join(dir, "obs") },
+    );
+    assert.deepEqual(result.structured, { outcome: "ready_for_review" });
+
+    const bad = await fakeCodex(dir, { events: SAMPLE_EVENTS, lastMessage: "Here is the result: {\"outcome\":\"ready_for_review\"}\n" });
+    const error = await executeCodexAgentNodeSession(
+      { cwd: dir, prompt: "p", outputSchema: { type: "object" } },
+      { env: { ...process.env, CODEX_PATH: bad }, observationRoot: path.join(dir, "obs") },
+    ).then(() => undefined, (failure: unknown) => failure);
+    assert(error instanceof AgentRunError);
+    assert.equal(error.reason, "invalid-output");
+    assert.equal(error.failureClass, "contract");
+    const failure = JSON.parse(await readFile(path.join(error.observationDir!, "failure.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(failure.failureClass, "contract");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

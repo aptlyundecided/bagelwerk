@@ -58,16 +58,43 @@ Every harness session writes a Node observation directory (`beginNodeObservation
   events.ndjson        raw harness events (Codex: verbatim; Claude Code: normalized type/delta records)
   run-events.ndjson    projected AgentRunEvents (one readable step per line)
   summary.json         status, token usage, counts, warnings, runEventCount
-  raw-output.md        final agent text (success)
-  failure.json         reason + bounded stderr tail (failure)
+  raw-output.md        final agent text (success; also kept on contract failures)
+  structured-output.json  parsed answer, when an outputSchema was given
+  output-schema.json   the schema sent, when one was given
+  failure.json         reason, failureClass + bounded stderr tail (failure)
   stderr.txt           bounded stderr tail (Codex)
+  response.json, thinking.md  provider response and reasoning text (Ollama)
 ```
 
 An `AgentRunEvent` is `{seq, at, harness, kind, phase?, itemId?, summary, detail?}`. `kind` is one of `session`, `turn`, `message`, `reasoning`, `command`, `file_change`, `tool`, `web_search`, `todo`, `usage`, `error`, `result`, `other`; `phase` is `started`/`updated`/`completed`/`failed`. `itemId` joins a started step to its completion. `detail` is bounded (`boundedDetail`) so one event never carries a whole file or log. Pass `onRunEvent` to stream steps to a UI or database; a sink that throws or rejects never stops the agent.
 
 Token accounting is reported as `AgentTokenUsage` (`inputTokens`, `cachedInputTokens`, `cacheWriteTokens`, `outputTokens`, `reasoningOutputTokens`, `totalTokens`) regardless of harness.
 
-Failures throw `AgentRunError` with `reason` (`timeout`, `aborted`, `exit`, `spawn`, `invalid-output`), `observationDir`, `exitCode`, a bounded `stderrTail`, and usage so far. Both harnesses accept `signal` and `timeoutMs`; on POSIX the CLI runs in its own process group and is killed with everything it started.
+Failures throw `AgentRunError` with `reason` (`timeout`, `aborted`, `exit`, `spawn`, `http`, `empty-output`, `truncated`, `invalid-output`), `failureClass`, `observationDir`, `exitCode`, a bounded `stderrTail`, usage so far, and for contract failures the unreadable `rawText`. The Codex, Claude Code and Ollama harnesses accept `signal` and `timeoutMs`; on POSIX the CLIs run in their own process group and are killed with everything they started.
+
+## Structured replies and failure classes
+
+Pass `outputSchema` to the Claude Code, Codex or Ollama harness to have the provider constrain the answer, and read the parsed value from `result.structured`. Each harness sends the schema the provider's own way: Claude Code `--json-schema` (the answer comes from the `result` event's `structured_output`), Codex `--output-schema`, and Ollama `format` or a single `reply` tool (see below). Do not ask for JSON in the prompt and parse prose: that is the failure this exists to remove.
+
+`readStructuredReply(rawText, provided?)` is the shared reader. It takes the provider's parsed object when there is one, otherwise exactly one JSON value (one surrounding code fence is allowed). Prose around the JSON is rejected rather than searched, so a broken contract is visible instead of silently repaired.
+
+Every failed call carries a `failureClass`, written to `failure.json` and `summary.json`:
+
+| Class | Meaning | Reasons |
+|---|---|---|
+| `transport` | The call failed before the model's judgement could be seen | `timeout`, `aborted`, `exit`, `spawn`, `http`, `empty-output`, `truncated` |
+| `contract` | A reply came back but could not be read as the requested structure | `invalid-output` |
+| `node` | The reply was readable and the Node's own check rejected it | any error that is not an `AgentRunError` |
+
+`classifyAgentFailure(error)` returns the class for anything a Node catches. Only `node` failures say anything about the model's reasoning, so report transport and contract counts first when you compare models or prompts. This classifies single model calls; it is not a Flow recovery taxonomy, which `flow-runner/intent-contracts.md` still leaves out.
+
+## Ollama harness (`ollamaAgentCore.ts`)
+
+`executeOllamaChatNodeSession({model, prompt, system?, outputSchema?, structuredVia?, options?, think?}, deps)` makes one `POST <host>/api/chat` call with `stream: false`. The host comes from `deps.host`, then `OLLAMA_HOST`, then `http://localhost:11434`; `deps.apiKey` or `OLLAMA_API_KEY` is sent as a bearer token and never written to disk. It returns `rawText`, `structured`, `structuredVia`, `thinking`, `doneReason`, `tokenUsage` and `observationDir`. There are no tools: the caller owns any lookup loop.
+
+An empty answer throws `empty-output` and a `done_reason` of `length` throws `truncated`, both with how much reasoning text was produced, so an empty reply can be told apart from a model that spent its budget thinking.
+
+`structuredVia` chooses how `outputSchema` is sent. `format` uses Ollama's constrained decoding, which local Ollama enforces. `tool` offers one `reply` tool whose parameters are the schema and reads the answer from its call arguments. Ollama Cloud accepted `format` and `response_format` but ignored both for gemma4:31b, glm-5.3-flash and gpt-oss:120b on 2026-11-28, while gemma4:31b returned the tool call in 5 of 5 tries. `auto`, the default, uses `tool` for `https://ollama.com` and `format` elsewhere. Tool arguments are shaped by the model rather than enforced by decoding, so validate them against Node rules.
 
 ## Codex harness (`codexAgentCore.ts`)
 
@@ -79,4 +106,4 @@ The event projection follows `codex-rs/exec/src/exec_events.rs` (`thread.*`, `tu
 
 ## Claude Code harness additions
 
-`executeClaudeCodeAgentNodeSession` keeps its existing contract and adds: `dontAsk` permission mode (deny anything not pre-approved, for unattended scoped runs), `disallowedTools`, `extraArgs` (for example `--settings <json>` with a sandbox block, `--strict-mcp-config`), `deps.signal`, `deps.timeoutMs`, `deps.observationRoot`, `deps.onRunEvent`, and native result fields `tokenUsage`, `costUsd`, `numTurns`, `sessionId`, `resultText`. The prompt is placed after `--` so it can never be parsed as a tool name.
+`executeClaudeCodeAgentNodeSession` keeps its existing contract and adds: `dontAsk` permission mode (deny anything not pre-approved, for unattended scoped runs), `disallowedTools`, `extraArgs` (for example `--settings <json>` with a sandbox block, `--strict-mcp-config`), `deps.signal`, `deps.timeoutMs`, `deps.observationRoot`, `deps.onRunEvent`, native result fields `tokenUsage`, `costUsd`, `numTurns`, `sessionId`, `resultText`, and `outputSchema` → `structured` (see above). The prompt is placed after `--` so it can never be parsed as a tool name. `extraArgs` may not contain `--json-schema`; pass `outputSchema`. Claude Code's StructuredOutput tool works under `dontAsk` without being added to `allowedTools`.

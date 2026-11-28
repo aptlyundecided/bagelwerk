@@ -132,3 +132,79 @@ test("a timed-out Claude Code run surfaces reason=timeout with its observation d
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// --- Structured replies -------------------------------------------------------------------------
+
+const ACTION_SCHEMA = { type: "object", required: ["op"], properties: { op: { type: "string" } } };
+
+test("buildClaudeCodeArgs passes outputSchema as --json-schema before caller args", () => {
+  const args = buildClaudeCodeArgs({ model: "claude-haiku-4-5", allowedTools: [], outputSchema: ACTION_SCHEMA, extraArgs: ["--strict-mcp-config"], prompt: "p" });
+  const at = args.indexOf("--json-schema");
+  assert(at > 0);
+  assert.deepEqual(JSON.parse(args[at + 1]!), ACTION_SCHEMA);
+  assert(at < args.indexOf("--strict-mcp-config"));
+});
+
+test("extraArgs may not set --json-schema behind the harness's back", async () => {
+  await assert.rejects(
+    executeClaudeCodeAgentNodeSession({ provider: "anthropic", model: "m", thinkingLevel: "off", allowedTools: [], cwd: tmpdir(), prompt: "p", extraArgs: ["--json-schema", "{}"] }),
+    /pass outputSchema instead/,
+  );
+});
+
+function structuredEvents(result: Record<string, unknown>): ClaudeCodeStreamEvent[] {
+  return [
+    { type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "I'll search first." }, { type: "tool_use", id: "tu_s", name: "StructuredOutput", input: { op: "search" } }] } },
+    { type: "result", subtype: "success", is_error: false, num_turns: 2, ...result },
+  ] as ClaudeCodeStreamEvent[];
+}
+
+async function runStructured(events: ClaudeCodeStreamEvent[]) {
+  const dir = await mkdtemp(path.join(tmpdir(), "bw-claude-structured-"));
+  try {
+    let args: string[] = [];
+    const outcome = await executeClaudeCodeAgentNodeSession(
+      { provider: "anthropic", model: "claude-haiku-4-5", thinkingLevel: "off", allowedTools: [], cwd: dir, prompt: "p", outputSchema: ACTION_SCHEMA },
+      {
+        env: {},
+        observationRoot: path.join(dir, "obs"),
+        runClaudeCodeCommand: async (invocation) => {
+          args = buildClaudeCodeArgs(invocation);
+          for (const event of events) invocation.onEvent(event);
+          return { exitCode: 0, stderr: "" };
+        },
+      },
+    ).then((value) => ({ value }), (error: unknown) => ({ error }));
+    const observationDir = "value" in outcome ? outcome.value.observationDir : (outcome.error as { observationDir?: string }).observationDir;
+    const failure = observationDir && "error" in outcome ? JSON.parse(await readFile(path.join(observationDir, "failure.json"), "utf8")) as Record<string, unknown> : undefined;
+    return { ...outcome, args, failure };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+test("a structured run returns the result event's structured_output even when the assistant also wrote prose", async () => {
+  const run = await runStructured(structuredEvents({ result: '{"op":"search"}', structured_output: { op: "search" } }));
+  assert(run.args.includes("--json-schema"));
+  assert("value" in run);
+  assert.deepEqual(run.value.structured, { op: "search" });
+});
+
+test("a structured run that ends without the structure is a contract failure that keeps the reply", async () => {
+  const run = await runStructured(structuredEvents({ subtype: "error_max_structured_output_retries", is_error: true, result: "I could not decide." }));
+  assert("error" in run);
+  const error = run.error as { reason?: string; failureClass?: string; rawText?: string; message: string };
+  assert.equal(error.reason, "invalid-output");
+  assert.equal(error.failureClass, "contract");
+  assert.equal(error.rawText, "I could not decide.");
+  assert.match(error.message, /error_max_structured_output_retries/);
+  assert.equal(run.failure?.failureClass, "contract");
+});
+
+test("a structured run with no answer at all is a transport failure", async () => {
+  const run = await runStructured([{ type: "result", subtype: "success", is_error: false } as ClaudeCodeStreamEvent]);
+  assert("error" in run);
+  const error = run.error as { reason?: string; failureClass?: string };
+  assert.equal(error.reason, "empty-output");
+  assert.equal(error.failureClass, "transport");
+});

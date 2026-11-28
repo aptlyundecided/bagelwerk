@@ -11,7 +11,7 @@ import { createInterface } from "node:readline";
  * stream stays in the Node observation directory for anything the summary drops.
  */
 
-export type AgentHarnessId = "codex" | "claude-code";
+export type AgentHarnessId = "codex" | "claude-code" | "ollama";
 
 export type AgentRunEventKind =
   | "session"
@@ -112,32 +112,69 @@ export function boundedDetail(value: unknown, depth = 0, maxString = 2000): unkn
   return String(value);
 }
 
+export type AgentRunErrorReason =
+  | "timeout"
+  | "aborted"
+  | "exit"
+  | "spawn"
+  | "http"
+  | "empty-output"
+  | "truncated"
+  | "invalid-output";
+
+/**
+ * Who a failed model call should be blamed on, before anyone grades the answer.
+ *
+ * - `transport`: the call itself failed — the CLI or API errored, timed out, was cancelled,
+ *   returned nothing, or was cut off by its token limit. The model's judgement was never seen.
+ * - `contract`: a reply came back but could not be read as the requested structure.
+ * - `node`: the reply was readable and the Node's own check rejected it.
+ *
+ * Only `node` failures say anything about the model's reasoning. Report the other two first.
+ */
+export type AgentFailureClass = "transport" | "contract" | "node";
+
+export function failureClassForReason(reason: AgentRunErrorReason): AgentFailureClass {
+  return reason === "invalid-output" ? "contract" : "transport";
+}
+
+/** Classifies any error thrown while running and checking a model call. Errors that are not `AgentRunError`s are the Node's own rejection. */
+export function classifyAgentFailure(error: unknown): AgentFailureClass {
+  return error instanceof AgentRunError ? error.failureClass : "node";
+}
+
 /** Error thrown by harness sessions. Carries what a caller needs to show and inspect the failure. */
 export class AgentRunError extends Error {
   readonly harness: AgentHarnessId;
   readonly observationDir?: string;
   readonly exitCode?: number | null;
   readonly stderrTail?: string;
-  readonly reason: "timeout" | "aborted" | "exit" | "spawn" | "invalid-output";
+  readonly reason: AgentRunErrorReason;
+  readonly failureClass: AgentFailureClass;
   readonly tokenUsage?: AgentTokenUsage;
+  /** The unreadable reply, for `contract` failures, so it can be inspected without opening the observation directory. */
+  readonly rawText?: string;
 
   constructor(params: {
     message: string;
     harness: AgentHarnessId;
-    reason: AgentRunError["reason"];
+    reason: AgentRunErrorReason;
     observationDir?: string;
     exitCode?: number | null;
     stderrTail?: string;
     tokenUsage?: AgentTokenUsage;
+    rawText?: string;
   }) {
     super(params.message);
     this.name = "AgentRunError";
     this.harness = params.harness;
     this.reason = params.reason;
+    this.failureClass = failureClassForReason(params.reason);
     this.observationDir = params.observationDir;
     this.exitCode = params.exitCode;
     this.stderrTail = params.stderrTail;
     this.tokenUsage = params.tokenUsage;
+    this.rawText = params.rawText;
   }
 }
 
@@ -249,6 +286,28 @@ export function runJsonlProcess(params: JsonlProcessParams): Promise<JsonlProces
     if (params.stdin !== undefined) child.stdin.end(params.stdin);
     else child.stdin.end();
   });
+}
+
+export type StructuredReplyRead = { ok: true; value: unknown } | { ok: false; issue: string };
+
+/**
+ * Reads a reply that a provider was asked to constrain to a JSON Schema.
+ *
+ * Prefers the provider's own parsed object (`provided`). Otherwise the text must be one JSON
+ * value, optionally inside a single code fence. Prose around the JSON is a contract failure,
+ * not something to dig through: with the schema passed to the provider it should never happen,
+ * and when it does the caller needs to see it. Schema conformance is the provider's job;
+ * validate the value against Node rules after this returns.
+ */
+export function readStructuredReply(rawText: string, provided?: unknown): StructuredReplyRead {
+  if (provided !== undefined && provided !== null) return { ok: true, value: provided };
+  const text = rawText.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/, "$1").trim();
+  if (!text) return { ok: false, issue: "the reply was empty" };
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch (error) {
+    return { ok: false, issue: `the reply was not one JSON value (${error instanceof Error ? error.message : String(error)})` };
+  }
 }
 
 /** Builds the per-run event recorder: stamps seq/at/harness and fans out to sinks without letting a sink break the run. */

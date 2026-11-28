@@ -6,6 +6,7 @@ export * from "./piAgentCore";
 export * from "./cursorAgentCore";
 export * from "./claudeCodeAgentCore";
 export * from "./opencodeAgentCore";
+export * from "./ollamaAgentCore";
 export * from "./skillBackedCore";
 export * from "./agentHarnessAvailability";
 export * from "./validatedSkillBackedNode";
