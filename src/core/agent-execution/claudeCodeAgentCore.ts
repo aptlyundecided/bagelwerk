@@ -9,6 +9,7 @@ import {
   describeTokenUsage,
   emptyTokenUsage,
   preview,
+  readStructuredReply,
   runJsonlProcess,
   tail,
   type AgentRunEvent,
@@ -37,6 +38,12 @@ export type ClaudeCodeAgentNodeSessionParams = {
   disallowedTools?: string[];
   /** Extra CLI arguments (for example `--settings <json>`, `--add-dir`, `--strict-mcp-config`), placed before the prompt. */
   extraArgs?: string[];
+  /**
+   * JSON Schema for the final answer, passed as `--json-schema`. Claude Code then has to answer
+   * through its StructuredOutput tool, and the parsed value is returned as `structured`. A run
+   * that ends without one fails with reason `invalid-output` (a contract failure).
+   */
+  outputSchema?: unknown;
 };
 
 export type ClaudeCodeAgentNodeSessionResult = {
@@ -64,6 +71,8 @@ export type ClaudeCodeAgentNodeSessionResult = {
   sessionId?: string;
   /** The final `result` text Claude Code reports (the last assistant answer), when present. */
   resultText?: string;
+  /** The answer parsed from the `result` event's `structured_output`, when `outputSchema` was given. */
+  structured?: unknown;
 };
 
 export type ClaudeCodeAssistantEvent = {
@@ -94,6 +103,7 @@ export type ClaudeCodeCommandInvocation = {
   maxTurns?: number;
   disallowedTools?: string[];
   extraArgs?: string[];
+  outputSchema?: unknown;
   env: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -199,6 +209,7 @@ function validateParams(params: ClaudeCodeAgentNodeSessionParams): void {
   }
   if (params.disallowedTools !== undefined && !Array.isArray(params.disallowedTools)) throw new Error("disallowedTools must be an array");
   if (params.extraArgs !== undefined && !Array.isArray(params.extraArgs)) throw new Error("extraArgs must be an array");
+  if (params.extraArgs?.includes("--json-schema")) throw new Error("extraArgs must not include --json-schema; pass outputSchema instead.");
 }
 
 function resolveAgentPath(env: NodeJS.ProcessEnv): string {
@@ -435,7 +446,7 @@ export function projectClaudeCodeEvent(event: ClaudeCodeStreamEvent, toolNames: 
   return [{ kind: "other", summary: String(event.type), detail: boundedDetail(raw) as Record<string, unknown> }];
 }
 
-export function buildClaudeCodeArgs(params: Pick<ClaudeCodeCommandInvocation, "model" | "permissionMode" | "maxTurns" | "allowedTools" | "disallowedTools" | "extraArgs" | "prompt">): string[] {
+export function buildClaudeCodeArgs(params: Pick<ClaudeCodeCommandInvocation, "model" | "permissionMode" | "maxTurns" | "allowedTools" | "disallowedTools" | "extraArgs" | "outputSchema" | "prompt">): string[] {
   const args = [
     "-p",
     // Claude Code requires --verbose when combining --print with stream-json output.
@@ -449,6 +460,7 @@ export function buildClaudeCodeArgs(params: Pick<ClaudeCodeCommandInvocation, "m
   if (allowedTools.length > 0) args.push("--allowedTools", ...allowedTools);
   const disallowedTools = (params.disallowedTools ?? []).map((tool) => tool.trim()).filter(Boolean);
   if (disallowedTools.length > 0) args.push("--disallowedTools", ...disallowedTools);
+  if (params.outputSchema !== undefined) args.push("--json-schema", JSON.stringify(params.outputSchema));
   args.push(...(params.extraArgs ?? []));
   // `--` ends variadic tool lists so the prompt is never read as a tool name.
   args.push("--", params.prompt);
@@ -537,8 +549,10 @@ export async function executeClaudeCodeAgentNodeSession(
     ...(params.maxTurns !== undefined ? { maxTurns: params.maxTurns } : {}),
     ...(params.disallowedTools?.length ? { disallowedTools: params.disallowedTools } : {}),
     ...(params.extraArgs?.length ? { extraArgs: params.extraArgs } : {}),
+    ...(params.outputSchema !== undefined ? { outputSchema: true } : {}),
     ...(deps.timeoutMs !== undefined ? { timeoutMs: deps.timeoutMs } : {}),
   });
+  if (params.outputSchema !== undefined) await observation.writeJson("output-schema.json", params.outputSchema);
 
   const recorder = createRunEventRecorder({
     harness: "claude-code",
@@ -551,6 +565,8 @@ export async function executeClaudeCodeAgentNodeSession(
   let numTurns: number | undefined;
   let sessionId: string | undefined;
   let resultText: string | undefined;
+  let structuredOutput: unknown;
+  let structured: unknown;
   let resultIsError = false;
 
   let rawText = "";
@@ -573,6 +589,7 @@ export async function executeClaudeCodeAgentNodeSession(
       maxTurns: params.maxTurns,
       disallowedTools: params.disallowedTools,
       extraArgs: params.extraArgs,
+      outputSchema: params.outputSchema,
       env,
       signal: deps.signal,
       timeoutMs: deps.timeoutMs,
@@ -590,6 +607,7 @@ export async function executeClaudeCodeAgentNodeSession(
           if (typeof record.total_cost_usd === "number") costUsd = record.total_cost_usd;
           if (typeof record.num_turns === "number") numTurns = record.num_turns;
           if (typeof record.result === "string") resultText = record.result;
+          if (record.structured_output !== undefined) structuredOutput = record.structured_output;
           resultIsError = record.is_error === true;
         }
         for (const draft of projectClaudeCodeEvent(event, toolNames)) recorder.emit(draft);
@@ -640,6 +658,24 @@ export async function executeClaudeCodeAgentNodeSession(
         tokenUsage,
       });
     }
+    if (params.outputSchema !== undefined) {
+      const read = readStructuredReply(resultText ?? "", structuredOutput);
+      if (!read.ok) {
+        const empty = !resultText?.trim() && rawText.length === 0;
+        throw new AgentRunError({
+          message: empty
+            ? `Claude Code returned no answer${stopReason ? ` (${stopReason})` : ""}`
+            : `Claude Code did not return the requested structure${stopReason && stopReason !== "success" ? ` (${stopReason})` : ""}: ${read.issue}`,
+          harness: "claude-code",
+          reason: empty ? "empty-output" : "invalid-output",
+          observationDir: observation.artifactDir,
+          exitCode: commandResult.exitCode,
+          tokenUsage,
+          rawText: resultText ?? rawText,
+        });
+      }
+      structured = read.value;
+    }
 
     const finishedDate = now();
     const finishedAt = finishedDate.toISOString();
@@ -669,6 +705,7 @@ export async function executeClaudeCodeAgentNodeSession(
       ...(numTurns !== undefined ? { numTurns } : {}),
       ...(sessionId ? { sessionId } : {}),
       ...(resultText !== undefined ? { resultText } : {}),
+      ...(structured !== undefined ? { structured } : {}),
     };
     recorder.emit({
       kind: "result",
@@ -681,6 +718,7 @@ export async function executeClaudeCodeAgentNodeSession(
     await writeFile(textArtifactPath, rawText.length > 0 ? `${rawText}\n` : "", "utf8");
     await writeFile(metadataArtifactPath, `${JSON.stringify({ ...result, metadataArtifactPath }, null, 2)}\n`, "utf8");
     await observation.writeText("raw-output.md", rawText);
+    if (structured !== undefined) await observation.writeJson("structured-output.json", structured);
     await observation.finalize({
       executionStatus: "completed",
       qualityStatus,
@@ -716,6 +754,9 @@ export async function executeClaudeCodeAgentNodeSession(
     }
     const finishedAt = now().toISOString();
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const failure = error instanceof AgentRunError
+      ? error
+      : new AgentRunError({ message: errorMessage, harness: "claude-code", reason: "spawn", observationDir: observation.artifactDir, tokenUsage });
     try {
       await writeFailureArtifact({
         artifactDir,
@@ -729,6 +770,9 @@ export async function executeClaudeCodeAgentNodeSession(
       });
       await observation.writeJson("failure.json", {
         error: errorMessage,
+        reason: failure.reason,
+        failureClass: failure.failureClass,
+        ...(failure.rawText !== undefined ? { rawText: failure.rawText } : {}),
         startedAt,
         finishedAt,
         agentPath,
@@ -746,6 +790,8 @@ export async function executeClaudeCodeAgentNodeSession(
         executionStatus: "failed",
         qualityStatus: "failed",
         errorMessage,
+        failureReason: failure.reason,
+        failureClass: failure.failureClass,
         legacyFailureArtifactPath: path.join(artifactDir, `${fileBase}__failed.json`),
         eventCount,
         toolExecutionCount,
@@ -758,13 +804,6 @@ export async function executeClaudeCodeAgentNodeSession(
     } catch {
       // Best-effort failure artifact only.
     }
-    if (error instanceof AgentRunError) throw error;
-    throw new AgentRunError({
-      message: error instanceof Error ? error.message : String(error),
-      harness: "claude-code",
-      reason: "spawn",
-      observationDir: observation.artifactDir,
-      tokenUsage,
-    });
+    throw failure;
   }
 }

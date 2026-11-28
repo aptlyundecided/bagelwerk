@@ -10,6 +10,7 @@ import {
   describeTokenUsage,
   emptyTokenUsage,
   preview,
+  readStructuredReply,
   runJsonlProcess,
   tail,
   type AgentRunEvent,
@@ -40,7 +41,11 @@ export type CodexAgentNodeSessionParams = {
   model?: string;
   /** Extra `codex exec` arguments, inserted before the stdin marker. Example: `["--sandbox", "read-only"]`. */
   execArgs?: string[];
-  /** JSON Schema for the final message. Written into the observation dir and passed as `--output-schema`. */
+  /**
+   * JSON Schema for the final message. Written into the observation dir and passed as `--output-schema`.
+   * The parsed message is returned as `structured`; a final message that is not one JSON value fails
+   * with reason `invalid-output` (a contract failure).
+   */
   outputSchema?: unknown;
 };
 
@@ -52,6 +57,8 @@ export type CodexAgentNodeSessionResult = {
   model?: string;
   /** Final agent message (from `--output-last-message`, falling back to the last agent_message item). */
   rawText: string;
+  /** The final message parsed as JSON, when `outputSchema` was given. */
+  structured?: unknown;
   threadId?: string;
   observationDir: string;
   startedAt: string;
@@ -405,6 +412,24 @@ export async function executeCodexAgentNodeSession(
     }
   }
 
+  let structured: unknown;
+  if (!failure && params.outputSchema !== undefined) {
+    const read = readStructuredReply(rawText);
+    if (read.ok) structured = read.value;
+    else {
+      failure = new AgentRunError({
+        message: rawText ? `Codex did not return the requested structure: ${read.issue}` : "Codex returned no final message",
+        harness: "codex",
+        reason: rawText ? "invalid-output" : "empty-output",
+        observationDir: observation.artifactDir,
+        exitCode: processResult?.exitCode,
+        stderrTail,
+        tokenUsage: usage,
+        rawText,
+      });
+    }
+  }
+
   const summaryBase = {
     harness: "codex",
     threadId,
@@ -422,10 +447,11 @@ export async function executeCodexAgentNodeSession(
   };
 
   if (failure) {
-    recorder.emit({ kind: "result", phase: "failed", summary: failure.message, detail: { reason: failure.reason, exitCode: failure.exitCode } });
+    recorder.emit({ kind: "result", phase: "failed", summary: failure.message, detail: { reason: failure.reason, failureClass: failure.failureClass, exitCode: failure.exitCode } });
     await recorder.flush();
-    await observation.writeJson("failure.json", { error: failure.message, reason: failure.reason, stderrTail: tail(stderrTail, 4000) }).catch(() => undefined);
-    await observation.finalize({ ...summaryBase, executionStatus: "failed", qualityStatus: "failed", errorMessage: failure.message, runEventCount: recorder.count }).catch(() => undefined);
+    if (rawText) await observation.writeText("raw-output.md", rawText).catch(() => undefined);
+    await observation.writeJson("failure.json", { error: failure.message, reason: failure.reason, failureClass: failure.failureClass, stderrTail: tail(stderrTail, 4000) }).catch(() => undefined);
+    await observation.finalize({ ...summaryBase, executionStatus: "failed", qualityStatus: "failed", errorMessage: failure.message, failureReason: failure.reason, failureClass: failure.failureClass, runEventCount: recorder.count }).catch(() => undefined);
     throw failure;
   }
 
@@ -439,6 +465,7 @@ export async function executeCodexAgentNodeSession(
 
   const qualityStatus: NodeQualityStatus = rawText.length === 0 ? "failed" : warnings.length > 0 ? "degraded" : "success";
   await observation.writeText("raw-output.md", rawText);
+  if (structured !== undefined) await observation.writeJson("structured-output.json", structured);
   await observation.finalize({
     ...summaryBase,
     runEventCount: recorder.count,
@@ -452,6 +479,7 @@ export async function executeCodexAgentNodeSession(
     prompt: params.prompt,
     ...(params.model ? { model: params.model } : {}),
     rawText,
+    ...(structured !== undefined ? { structured } : {}),
     ...(threadId ? { threadId } : {}),
     observationDir: observation.artifactDir,
     startedAt: started.toISOString(),
